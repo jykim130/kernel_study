@@ -13,7 +13,7 @@ need sudo
 sudo apt-get update
 sudo apt-get install -y \
     build-essential gcc-11 bc bison flex libncurses-dev libssl-dev libelf-dev \
-    dwarves pkg-config git curl ca-certificates xz-utils cpio kmod \
+    dwarves pkg-config git curl ca-certificates gnupg xz-utils cpio kmod \
     e2fsprogs util-linux debootstrap debian-archive-keyring \
     qemu-system-x86 qemu-utils gdb python3
 log 'Dependencies installed. Next: bash labs/scripts/build-kernel.sh'

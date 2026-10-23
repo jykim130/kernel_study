@@ -48,6 +48,9 @@ if [[ $update_modules == y ]]; then
 else
     need debootstrap mkfs.ext4 truncate
     [[ $GUEST_ROOT_PASSWORD != *$'\n'* && $GUEST_ROOT_PASSWORD != *$'\r'* ]] || die 'Password must be one line.'
+    # Ubuntu 22.04 may ship a Debian keyring older than the Bookworm keys.
+    # Prepare pinned official keys before allocating or mounting the new image.
+    bash "$PROJECT_ROOT/scripts/prepare-debian-keyring.sh"
     work_image=$(mktemp "$IMAGE_DIR/.rootfs.XXXXXX.img")
     truncate -s "$ROOTFS_SIZE" "$work_image"
     # Explicit features avoid newer ext4 defaults unsupported by Linux 5.15.
@@ -55,7 +58,7 @@ else
     sudo mount -o loop "$work_image" "$mount_dir"
     log "Installing Debian $ROOTFS_SUITE amd64"
     sudo debootstrap --arch=amd64 --variant=minbase --include=ca-certificates \
-        --keyring=/usr/share/keyrings/debian-archive-keyring.gpg \
+        --keyring="$DEBIAN_KEYRING" \
         "$ROOTFS_SUITE" "$mount_dir" "$ROOTFS_MIRROR"
     sudo mount -t proc proc "$mount_dir/proc"
     sudo mount -t sysfs sysfs "$mount_dir/sys"

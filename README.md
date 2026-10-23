@@ -53,7 +53,7 @@ bash labs/scripts/install-deps.sh
 ```
 
 GCC 11, make, bison, flex, ncurses·OpenSSL·ELF 개발 라이브러리,
-debootstrap, Debian 아카이브 키, QEMU, GDB 등을 설치합니다.
+debootstrap, Debian 아카이브 키, GnuPG, QEMU, GDB 등을 설치합니다.
 커널 빌드는 일반 사용자로 진행하고 디스크 이미지 마운트와 사용자 공간 구성에 관리자 권한을 사용합니다.
 
 ## 4. 커널 다운로드와 빌드
@@ -95,6 +95,11 @@ cat labs/build/linux-5.15.2/include/config/kernel.release
 ```bash
 bash labs/scripts/make-rootfs.sh
 ```
+
+이미지를 만들기 전에 Debian 공식 사이트에서 Bookworm 서명 키를 받아,
+스크립트에 고정한 공개키 지문과 일치하는지 확인합니다.
+확인된 키는 `labs/.cache/debian-bookworm.gpg`에 모아 `debootstrap`의 서명 검증에 사용합니다.
+Ubuntu 22.04의 오래된 시스템 키 파일에 Bookworm 키가 없는 경우도 이 과정에서 처리합니다.
 
 `debootstrap`으로 **Debian Bookworm amd64** 사용자 공간을 구성하고,
 4GB의 sparse raw ext4 디스크 이미지인 `labs/images/rootfs.img`를 만듭니다.
@@ -245,6 +250,7 @@ kernel_study/
    │  ├─ install-deps.sh      우분투 패키지 설치
    │  ├─ build-kernel.sh      소스 다운로드·설정·빌드
    │  ├─ make-rootfs.sh       Debian 이미지 생성·모듈 갱신
+   │  ├─ prepare-debian-keyring.sh  Bookworm 공식 서명 키 준비
    │  └─ run-qemu.sh          일반 실행·GDB 대기·명령 미리 보기
    ├─ tests/test_scripts.py   스크립트 테스트
    ├─ .cache/                 다운로드·임시 파일 (Git 제외)
@@ -260,6 +266,7 @@ kernel_study/
 | --- | --- |
 | `Linux x86_64` 환경이 필요하다는 오류 | Windows PowerShell 대신 VMware 우분투 터미널에서 실행 |
 | `gcc-11` 또는 빌드 도구 없음 | 3단계의 의존성 설치 완료 여부 |
+| `Release signed by unknown key` / `F8D2585B8783D481` | 아래 Bookworm 서명 키 오류 복구 절차 참고 |
 | 빌드 중 프로세스가 `Killed`로 종료됨 | VM 메모리와 여유 공간 확인, `BUILD_JOBS=2` 또는 `1` 사용 |
 | `VFS: Unable to mount root fs` | virtio·ext4 내장 옵션, `/dev/vda`, 이미지 생성 완료 여부 |
 | 로그인 화면 없이 QEMU가 대기함 | `--debug`라면 GDB에서 연결한 뒤 `continue` 실행 |
@@ -267,6 +274,25 @@ kernel_study/
 | 잠금 파일 사용 중 | 다른 QEMU·빌드·이미지 작업이 끝났는지 확인. 파일을 삭제해서 우회하지 않음 |
 | 이미지 생성 후 정리 실패 안내 | 안내된 마운트 지점을 `findmnt`로 확인하고 `sudo umount -R <안내된 경로>`로 해제한 뒤 재시도 |
 | `--accel kvm` 실행 실패 | 기본 TCG로 실행하거나 VMware의 중첩 가상화와 `/dev/kvm` 접근 권한 확인 |
+
+### Bookworm 서명 키 오류 복구
+
+`Release signed by unknown key (key id F8D2585B8783D481)`은
+Bookworm 릴리스 서명을 검증할 키가 현재 키 파일에 없다는 뜻입니다.
+키 ID는 Debian 공식 릴리스 키 지문 `4D64 FEC1 19C2 0290 67D6 E791 F8D2 585B 8783 D481`의 끝부분입니다.
+
+수정된 프로젝트 파일을 우분투에 반영한 뒤, 프로젝트 루트에서 실행합니다.
+
+```bash
+sudo apt-get update
+sudo apt-get install -y gnupg curl ca-certificates
+bash labs/scripts/make-rootfs.sh
+```
+
+새 스크립트가 공식 키를 준비하고 새 임시 이미지로 다시 생성합니다.
+커널을 다시 빌드하거나 실패한 `.rootfs.*.img`를 최종 이미지로 옮길 필요는 없습니다.
+최종 `labs/images/rootfs.img`가 이미 존재한다면 덮어쓰지 않고 종료합니다.
+`--no-check-gpg`로 서명 검증을 생략하지 않습니다.
 
 정적 검사와 실행 명령·실패 경로 테스트는 다음 명령으로 수행합니다.
 
@@ -282,6 +308,7 @@ python3 -m unittest discover -s labs/tests -v
 - [Linux 5.15 빌드 요구 사항](https://docs.kernel.org/5.15/process/changes.html)
 - [kernel.org 공식 SHA-256 목록](https://www.kernel.org/pub/linux/kernel/v5.x/sha256sums.asc)
 - [debootstrap 사용법](https://manpages.debian.org/bookworm/debootstrap/debootstrap.8.en.html)
+- [Debian 공식 아카이브·릴리스 서명 키](https://ftp-master.debian.org/keys.html)
 - [QEMU 실행 옵션](https://www.qemu.org/docs/master/system/invocation.html)
 - [QEMU GDB 사용법](https://www.qemu.org/docs/master/system/gdb.html)
 
