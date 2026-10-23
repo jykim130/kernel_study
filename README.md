@@ -266,7 +266,6 @@ kernel_study/
 | --- | --- |
 | `Linux x86_64` 환경이 필요하다는 오류 | Windows PowerShell 대신 VMware 우분투 터미널에서 실행 |
 | `gcc-11` 또는 빌드 도구 없음 | 3단계의 의존성 설치 완료 여부 |
-| `Release signed by unknown key` / `F8D2585B8783D481` | 아래 Bookworm 서명 키 오류 복구 절차 참고 |
 | 빌드 중 프로세스가 `Killed`로 종료됨 | VM 메모리와 여유 공간 확인, `BUILD_JOBS=2` 또는 `1` 사용 |
 | `VFS: Unable to mount root fs` | virtio·ext4 내장 옵션, `/dev/vda`, 이미지 생성 완료 여부 |
 | 로그인 화면 없이 QEMU가 대기함 | `--debug`라면 GDB에서 연결한 뒤 `continue` 실행 |
