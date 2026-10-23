@@ -1,0 +1,7 @@
+/labs/.cache/
+/labs/src/
+/labs/build/
+/labs/images/
+/labs/logs/
+__pycache__/
+*.pyc
