@@ -1,5 +1,7 @@
 # 커널 스터디: Linux 빌드와 QEMU 실습
 
+README.md 에서는 VMware로 진행하지만, VirtualBox로 진행해도 됩니다.
+
 VMware에 설치한 **Ubuntu 22.04 LTS amd64**에서 Linux **5.15.2**를 빌드하고,
 QEMU 안에서 부팅하는 실습 환경입니다.
 
@@ -18,17 +20,11 @@ QEMU 안에서 부팅하는 실습 환경입니다.
 
 ## 1. VMware에 우분투 준비
 
-1. [Ubuntu 22.04 LTS amd64 설치 이미지](https://releases.ubuntu.com/22.04/)로 VM을 만듭니다.
+1. [Ubuntu 22.04 LTS amd64 설치 이미지](https://releases.ubuntu.com/22.04/)로 VM을 만듭니다. 
 2. 실습 시작용 자원으로 CPU 4개, RAM 8GB, 디스크 60GB를 권장합니다.
    커널 소스·디버그 정보·빌드 결과가 공간을 사용하므로 여유 공간을 확보합니다.
 3. VMware 네트워크는 NAT로 설정하고 우분투 설치와 인터넷 연결을 완료합니다.
 4. 우분투 사용자에게 `sudo` 권한이 있는지 확인합니다.
-
-기본 실행은 QEMU의 **TCG 소프트웨어 에뮬레이션**입니다. VMware에서 중첩 가상화를
-활성화하지 않아도 사용할 수 있습니다. KVM은 `/dev/kvm`이 실제로 제공되는 환경에서만
-선택적으로 사용합니다.
-
-현재 스크립트의 대상은 Ubuntu 22.04와 GCC 11입니다. 다른 우분투 버전의 호환성은 별도 검증이 필요합니다.
 
 ## 2. 프로젝트 받기
 
@@ -41,10 +37,6 @@ cd ~/work
 git clone https://github.com/jykim130/kernel_study.git
 cd kernel_study
 ```
-
-아직 변경 사항을 GitHub에 올리지 않았다면 이 프로젝트 폴더를 우분투의
-`~/work/kernel_study`로 복사한 뒤 그 안에서 진행합니다.
-VMware 공유 폴더 대신 **우분투 홈 디렉터리 안**에 소스와 빌드 결과를 둡니다.
 
 ## 3. 빌드·실행 도구 설치
 
@@ -74,12 +66,6 @@ bash labs/scripts/build-kernel.sh
 DWARF 4 디버그 정보가 포함됩니다. 따라서 별도의 initramfs 없이 `/dev/vda`에서 부팅합니다.
 재실행하면 기존 소스와 `.config`를 유지한 채 필요한 부분을 다시 빌드합니다.
 
-메모리가 부족하거나 우분투가 느려지면 병렬 빌드 수를 줄입니다.
-
-```bash
-BUILD_JOBS=2 bash labs/scripts/build-kernel.sh
-```
-
 완료 후 결과물을 확인합니다.
 
 ```bash
@@ -96,11 +82,6 @@ cat labs/build/linux-5.15.2/include/config/kernel.release
 bash labs/scripts/make-rootfs.sh
 ```
 
-이미지를 만들기 전에 Debian 공식 사이트에서 Bookworm 서명 키를 받아,
-스크립트에 고정한 공개키 지문과 일치하는지 확인합니다.
-확인된 키는 `labs/.cache/debian-bookworm.gpg`에 모아 `debootstrap`의 서명 검증에 사용합니다.
-Ubuntu 22.04의 오래된 시스템 키 파일에 Bookworm 키가 없는 경우도 이 과정에서 처리합니다.
-
 `debootstrap`으로 **Debian Bookworm amd64** 사용자 공간을 구성하고,
 4GB의 sparse raw ext4 디스크 이미지인 `labs/images/rootfs.img`를 만듭니다.
 systemd, 시리얼 로그인, 네트워크와 기본 실습 명령을 설정한 뒤 방금 빌드한 커널 모듈을 설치합니다.
@@ -111,7 +92,6 @@ systemd, 시리얼 로그인, 네트워크와 기본 실습 명령을 설정한 
 - 호스트 이름: `kernel-study`
 - 네트워크: QEMU user networking, DHCP
 
-이 계정은 로컬 실습용입니다. SSH 서버와 외부에서 들어오는 포트 포워딩은 구성하지 않습니다.
 로그인 후 비밀번호는 `passwd`로 바꿀 수 있습니다.
 초기 이미지 생성 시 다른 비밀번호를 사용하려면 다음과 같이 입력합니다.
 
