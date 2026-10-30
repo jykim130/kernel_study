@@ -1,4 +1,4 @@
-# 커널 스터디: Linux 빌드와 QEMU 실습
+# 커널 스터디: 실습환경 구축
 
 README.md 에서는 VMware로 진행하지만, VirtualBox로 진행해도 됩니다.
 
@@ -218,26 +218,6 @@ bash labs/scripts/run-qemu.sh --debug --gdb-port 1235
 기본 설정은 `labs/config/lab.conf.sh`에 있습니다. 커널 버전과 다운로드 체크섬은 서로 일치해야 합니다.
 커널을 다른 버전으로 바꾸면 빌드·설정·사용자 공간 호환성도 다시 확인해야 합니다.
 
-```text
-kernel_study/
-├─ README.md                  설치·실행 안내
-├─ .gitattributes
-├─ .gitignore
-└─ labs/
-   ├─ config/lab.conf.sh       버전·리소스·경로 기본값
-   ├─ scripts/
-   │  ├─ common.sh            공통 경로·유틸리티
-   │  ├─ install-deps.sh      우분투 패키지 설치
-   │  ├─ build-kernel.sh      소스 다운로드·설정·빌드
-   │  ├─ make-rootfs.sh       Debian 이미지 생성·모듈 갱신
-   │  ├─ prepare-debian-keyring.sh  Bookworm 공식 서명 키 준비
-   │  └─ run-qemu.sh          일반 실행·GDB 대기·명령 미리 보기
-   ├─ tests/test_scripts.py   스크립트 테스트
-   ├─ .cache/                 다운로드·임시 파일 (Git 제외)
-   ├─ src/                    커널 소스 (Git 제외)
-   ├─ build/                  설정·bzImage·vmlinux·모듈 (Git 제외)
-   ├─ images/                 게스트 디스크 (Git 제외)
-   └─ logs/                   빌드·부팅 로그 (Git 제외)
 ```
 
 ## 문제가 생기면
@@ -253,34 +233,6 @@ kernel_study/
 | 잠금 파일 사용 중 | 다른 QEMU·빌드·이미지 작업이 끝났는지 확인. 파일을 삭제해서 우회하지 않음 |
 | 이미지 생성 후 정리 실패 안내 | 안내된 마운트 지점을 `findmnt`로 확인하고 `sudo umount -R <안내된 경로>`로 해제한 뒤 재시도 |
 | `--accel kvm` 실행 실패 | 기본 TCG로 실행하거나 VMware의 중첩 가상화와 `/dev/kvm` 접근 권한 확인 |
-
-### Bookworm 서명 키 오류 복구
-
-`Release signed by unknown key (key id F8D2585B8783D481)`은
-Bookworm 릴리스 서명을 검증할 키가 현재 키 파일에 없다는 뜻입니다.
-키 ID는 Debian 공식 릴리스 키 지문 `4D64 FEC1 19C2 0290 67D6 E791 F8D2 585B 8783 D481`의 끝부분입니다.
-
-수정된 프로젝트 파일을 우분투에 반영한 뒤, 프로젝트 루트에서 실행합니다.
-
-```bash
-sudo apt-get update
-sudo apt-get install -y gnupg curl ca-certificates
-bash labs/scripts/make-rootfs.sh
-```
-
-새 스크립트가 공식 키를 준비하고 새 임시 이미지로 다시 생성합니다.
-커널을 다시 빌드하거나 실패한 `.rootfs.*.img`를 최종 이미지로 옮길 필요는 없습니다.
-최종 `labs/images/rootfs.img`가 이미 존재한다면 덮어쓰지 않고 종료합니다.
-`--no-check-gpg`로 서명 검증을 생략하지 않습니다.
-
-정적 검사와 실행 명령·실패 경로 테스트는 다음 명령으로 수행합니다.
-
-```bash
-python3 -m unittest discover -s labs/tests -v
-```
-
-이 테스트는 실제 커널 컴파일·이미지 생성·부팅을 대체하지 않습니다.
-최초 우분투 검증은 위 3~6단계를 실행한 뒤 `uname -r`과 로그인 성공 여부로 확인합니다.
 
 ## 참고 자료
 
