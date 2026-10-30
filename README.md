@@ -218,21 +218,8 @@ bash labs/scripts/run-qemu.sh --debug --gdb-port 1235
 기본 설정은 `labs/config/lab.conf.sh`에 있습니다. 커널 버전과 다운로드 체크섬은 서로 일치해야 합니다.
 커널을 다른 버전으로 바꾸면 빌드·설정·사용자 공간 호환성도 다시 확인해야 합니다.
 
-```
 
-## 문제가 생기면
 
-| 증상 | 확인할 항목 |
-| --- | --- |
-| `Linux x86_64` 환경이 필요하다는 오류 | Windows PowerShell 대신 VMware 우분투 터미널에서 실행 |
-| `gcc-11` 또는 빌드 도구 없음 | 3단계의 의존성 설치 완료 여부 |
-| 빌드 중 프로세스가 `Killed`로 종료됨 | VM 메모리와 여유 공간 확인, `BUILD_JOBS=2` 또는 `1` 사용 |
-| `VFS: Unable to mount root fs` | virtio·ext4 내장 옵션, `/dev/vda`, 이미지 생성 완료 여부 |
-| 로그인 화면 없이 QEMU가 대기함 | `--debug`라면 GDB에서 연결한 뒤 `continue` 실행 |
-| `Kernel release mismatch` | 커널 빌드 후 `make-rootfs.sh --update-modules` 실행 |
-| 잠금 파일 사용 중 | 다른 QEMU·빌드·이미지 작업이 끝났는지 확인. 파일을 삭제해서 우회하지 않음 |
-| 이미지 생성 후 정리 실패 안내 | 안내된 마운트 지점을 `findmnt`로 확인하고 `sudo umount -R <안내된 경로>`로 해제한 뒤 재시도 |
-| `--accel kvm` 실행 실패 | 기본 TCG로 실행하거나 VMware의 중첩 가상화와 `/dev/kvm` 접근 권한 확인 |
 
 ## 참고 자료
 
