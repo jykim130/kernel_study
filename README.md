@@ -32,7 +32,7 @@ QEMU 안에서 부팅하는 실습 환경입니다.
 sudo apt-get update
 sudo apt-get install -y git
 
-mkdir -p ~/work
+mkdir -p ~/work (이 디렉토리 이름은 자유입니다!)
 cd ~/work
 git clone https://github.com/jykim130/kernel_study.git
 cd kernel_study
