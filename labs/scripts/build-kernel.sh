@@ -10,7 +10,8 @@ require_linux
 need curl tar sha256sum make "$KERNEL_CC" bison flex bc
 positive_integer BUILD_JOBS "$BUILD_JOBS"
 lock_lab
-mkdir -p "$CACHE_DIR" "$PROJECT_ROOT/src" "$KERNEL_BUILD" "$LOG_DIR"
+# Do not create KERNEL_SRC before the download/extraction check below.
+mkdir -p "$CACHE_DIR" "$PROJECT_ROOT/src" "$LOG_DIR"
 exec > >(tee "$LOG_DIR/build-$(date +%Y%m%d-%H%M%S).log") 2>&1
 
 if [[ ! -d $KERNEL_SRC ]]; then
@@ -27,6 +28,14 @@ if [[ ! -d $KERNEL_SRC ]]; then
     rmdir -- "$staging"
 fi
 [[ -f "$KERNEL_SRC/Makefile" ]] || die 'Incomplete kernel source tree.'
+
+# Keep an existing VM's settings when switching from the old separate build.
+# Object files and the old generated Makefile must not be copied into the source.
+legacy_config="$PROJECT_ROOT/build/linux-$KERNEL_VERSION/.config"
+if [[ ! -f "$KERNEL_BUILD/.config" && -f $legacy_config && $reset_config == n ]]; then
+    cp -- "$legacy_config" "$KERNEL_BUILD/.config"
+    log 'Reusing the previous build configuration; rebuilding in the source tree.'
+fi
 
 if [[ ! -f "$KERNEL_BUILD/.config" || $reset_config == y ]]; then
     if [[ -f "$KERNEL_BUILD/.config" ]]; then

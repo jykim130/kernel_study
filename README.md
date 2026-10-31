@@ -31,10 +31,11 @@ QEMU 안에서 부팅하는 실습 환경입니다.
 sudo apt-get update
 sudo apt-get install -y git
 
-mkdir -p ~/work (이 디렉토리 이름은 자유입니다!)
+mkdir -p ~/work # 이 디렉터리 이름은 자유입니다.
 cd ~/work
 git clone https://github.com/jykim130/kernel_study.git
 cd kernel_study
+chmod +x boot
 ```
 
 ## 3. 빌드·실행 도구 설치
@@ -57,23 +58,31 @@ bash labs/scripts/build-kernel.sh
 
 1. kernel.org에서 `linux-5.15.2.tar.xz`를 다운로드합니다.
 2. 공식 체크섬과 일치하는 SHA-256인지 확인합니다.
-3. `labs/src/linux-5.15.2`에 소스를 풀고 `labs/build/linux-5.15.2`에 빌드합니다.
+3. `labs/src/linux-5.15.2`에 소스를 풀고 같은 디렉터리 안에 빌드합니다.
 4. 최초 실행에서는 `x86_64_defconfig`를 만들고 실습용 설정을 적용합니다.
 5. 부팅용 `bzImage`, GDB용 `vmlinux`, 커널 모듈을 빌드합니다.
 
 설정에는 ext4, virtio 디스크·네트워크, 시리얼 콘솔을 커널에 내장하는 옵션과
 DWARF 4 디버그 정보가 포함됩니다. 따라서 별도의 initramfs 없이 `/dev/vda`에서 부팅합니다.
 재실행하면 기존 소스와 `.config`를 유지한 채 필요한 부분을 다시 빌드합니다.
+`.config`, `vmlinux`, `arch/x86/boot/bzImage`, 모듈 등은 모두 커널 소스 디렉터리에 생성됩니다.
+이전 터미널에서 출력 경로를 따로 지정했다면 직접 `make`를 실행하기 전에 `unset KBUILD_OUTPUT`으로 해제합니다.
 
 완료 후 결과물을 확인합니다.
 
 ```bash
-ls -lh labs/build/linux-5.15.2/arch/x86/boot/bzImage
-ls -lh labs/build/linux-5.15.2/vmlinux
-cat labs/build/linux-5.15.2/include/config/kernel.release
+ls -lh labs/src/linux-5.15.2/arch/x86/boot/bzImage
+ls -lh labs/src/linux-5.15.2/vmlinux
+cat labs/src/linux-5.15.2/include/config/kernel.release
 ```
 
 기본 커널 릴리스 이름은 `5.15.2-kernel-study`입니다.
+
+이전 분리 빌드 환경(`labs/build/linux-5.15.2`)을 이미 사용했다면 QEMU를 종료한 뒤
+빌드 스크립트를 한 번 실행합니다. 소스 디렉터리에 `.config`가 없을 때만 이전 빌드의
+`.config`를 가져와 소스 안에서 재빌드합니다. 수정한 소스와 기존 빌드 디렉터리는 유지합니다.
+기존 rootfs 이미지에는 `bash labs/scripts/make-rootfs.sh --update-modules`로 모듈을 갱신합니다.
+기존 빌드 디렉터리의 파일 전체를 소스에 복사하지 않습니다.
 
 ## 5. QEMU용 루트 파일시스템 생성
 
@@ -109,10 +118,13 @@ Bookworm이라는 배포판 이름은 고정하지만 설치 패키지는 해당
 ## 6. QEMU에서 부팅
 
 ```bash
-bash labs/scripts/run-qemu.sh
+./boot linux-5.15.2
 ```
 
 별도 GUI 창 대신 현재 터미널에 부팅 로그와 로그인 프롬프트가 나타납니다.
+`boot`는 프로젝트 루트에 있으며, 인자로 받은 커널 이름이 `labs/config/lab.conf.sh`의
+버전과 일치하는지 확인한 뒤 기존 QEMU 실행 코드를 호출합니다.
+기존 체크아웃에서 실행 권한이 없으면 `chmod +x boot`를 한 번 실행합니다.
 기본값은 TCG, 가상 CPU 2개, RAM 1024MB입니다.
 로그는 `labs/logs/qemu-*.log`에도 저장됩니다.
 
@@ -144,34 +156,55 @@ QEMU 강제 종료 단축키는 **Ctrl+A를 누른 뒤 X**입니다.
 ## 7. 소스 수정 후 다시 실행
 
 QEMU를 종료한 뒤 `labs/src/linux-5.15.2`의 코드를 수정합니다.
+아래 명령은 프로젝트 루트에서 시작하며, 새 터미널에서도 같은 GCC 11을 사용하도록 설정합니다.
 
 ```bash
-bash labs/scripts/build-kernel.sh
+unset KBUILD_OUTPUT
+export ARCH=x86 CC=gcc-11 HOSTCC=gcc-11
+cd labs/src/linux-5.15.2
+
+vim init/main.c
+make -j$(nproc)
+
+cd ../../..
+./boot linux-5.15.2
+```
+
+기존 `.config`를 사용하는 증분 빌드입니다. 코드를 수정할 때마다 `make defconfig`를
+실행하지 않습니다. 새 `.c` 파일을 추가했다면 해당 Makefile/Kbuild에 빌드 대상으로 등록합니다.
+`printk` 추가처럼 커널 본체만 바꿨다면 위 과정으로 확인할 수 있습니다.
+
+커널 트리에서 빌드하는 모듈도 변경했다면 프로젝트 루트에서 부팅 전에 갱신합니다.
+
+```bash
 bash labs/scripts/make-rootfs.sh --update-modules
-bash labs/scripts/run-qemu.sh
+./boot linux-5.15.2
 ```
 
 `--update-modules`는 기존 이미지의 사용자 파일을 유지하면서 커널 모듈을 갱신합니다.
 호스트의 `/lib/modules`에는 설치하지 않습니다.
+별도 UPB 실습 디렉터리에서 만든 외부 모듈은 따로 빌드해 게스트로 전달해야 합니다.
 이미지 생성·모듈 갱신·QEMU 실행은 같은 잠금 파일을 사용하므로 동시에 실행되지 않습니다.
+직접 실행한 `make`는 이 잠금을 사용하지 않으므로 QEMU를 종료하고 이미지 작업이 끝난 뒤 빌드합니다.
 
 추가 커널 설정은 다음 명령으로 편집합니다.
 
 ```bash
-make -C labs/src/linux-5.15.2 O="$PWD/labs/build/linux-5.15.2" ARCH=x86 CC=gcc-11 HOSTCC=gcc-11 menuconfig
+unset KBUILD_OUTPUT
+make -C labs/src/linux-5.15.2 ARCH=x86 CC=gcc-11 HOSTCC=gcc-11 menuconfig
 bash labs/scripts/build-kernel.sh
 ```
 
 루트 디스크·ext4·시리얼 콘솔 관련 내장 옵션을 끄면 initramfs 없이 부팅할 수 없습니다.
 원래 실습 설정으로 다시 시작하려면 빌드 스크립트에 `--reset-config`를 지정합니다.
-기존 `.config`는 빌드 디렉터리에 자동으로 백업합니다.
+기존 `.config`는 커널 소스 디렉터리에 자동으로 백업합니다.
 
 ## 8. GDB로 커널 진입점 관찰
 
 우분투 터미널 A에서 실행합니다.
 
 ```bash
-bash labs/scripts/run-qemu.sh --debug
+./boot linux-5.15.2 --debug
 ```
 
 게스트 CPU는 시작부터 멈추고 `127.0.0.1:1234`에서 GDB 연결을 기다립니다.
@@ -179,7 +212,7 @@ bash labs/scripts/run-qemu.sh --debug
 
 ```bash
 cd ~/work/kernel_study
-gdb labs/build/linux-5.15.2/vmlinux
+gdb labs/src/linux-5.15.2/vmlinux
 ```
 
 GDB 안에서 실행합니다.
@@ -199,19 +232,19 @@ GDB 안에서 실행합니다.
 
 ```bash
 # QEMU 명령만 출력; 이미지나 커널을 만들기 전에도 사용 가능
-bash labs/scripts/run-qemu.sh --dry-run
+./boot linux-5.15.2 --dry-run
 
 # 게스트 변경 사항을 이미지에 저장하지 않는 일회용 실행
-bash labs/scripts/run-qemu.sh --snapshot
+./boot linux-5.15.2 --snapshot
 
 # VMware 우분투에서 /dev/kvm 접근이 가능한 경우에만 선택
-bash labs/scripts/run-qemu.sh --accel kvm
+./boot linux-5.15.2 --accel kvm
 
 # QEMU 자원 조절
-QEMU_MEMORY=2048 QEMU_CPUS=2 bash labs/scripts/run-qemu.sh
+QEMU_MEMORY=2048 QEMU_CPUS=2 ./boot linux-5.15.2
 
 # 다른 디버깅 포트 사용; GDB에서도 같은 포트로 연결
-bash labs/scripts/run-qemu.sh --debug --gdb-port 1235
+./boot linux-5.15.2 --debug --gdb-port 1235
 ```
 
 기본 설정은 `labs/config/lab.conf.sh`에 있습니다. 커널 버전과 다운로드 체크섬은 서로 일치해야 합니다.

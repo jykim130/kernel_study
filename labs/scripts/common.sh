@@ -4,6 +4,8 @@
 set -euo pipefail
 PROJECT_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 source "$PROJECT_ROOT/config/lab.conf.sh"
+# An old shell setting must not redirect an in-tree build elsewhere.
+unset KBUILD_OUTPUT
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 log() { printf '\n[kernel-study] %s\n' "$*"; }
@@ -28,7 +30,7 @@ lock_lab() {
     flock -n 9 || die 'Another build, image operation or QEMU is using this project.'
 }
 kernel_make() {
-    make --no-print-directory -C "$KERNEL_SRC" O="$KERNEL_BUILD" \
+    make --no-print-directory -C "$KERNEL_SRC" \
         ARCH=x86 CC="$KERNEL_CC" HOSTCC="$KERNEL_CC" "$@"
 }
 require_build() {

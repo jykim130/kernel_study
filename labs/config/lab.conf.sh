@@ -22,7 +22,8 @@ QEMU_CPUS=${QEMU_CPUS:-2}
 CACHE_DIR="$PROJECT_ROOT/.cache"
 DEBIAN_KEYRING="$CACHE_DIR/debian-bookworm.gpg"
 KERNEL_SRC="$PROJECT_ROOT/src/linux-$KERNEL_VERSION"
-KERNEL_BUILD="$PROJECT_ROOT/build/linux-$KERNEL_VERSION"
+# Build in the source tree so the lab's plain `make` workflow uses these files.
+KERNEL_BUILD="$KERNEL_SRC"
 IMAGE_DIR="$PROJECT_ROOT/images"
 ROOTFS_IMAGE="$IMAGE_DIR/rootfs.img"
 LOG_DIR="$PROJECT_ROOT/logs"

@@ -85,7 +85,7 @@ else
 fi
 
 log 'Installing kernel modules into the guest image'
-sudo make --no-print-directory -C "$KERNEL_SRC" O="$KERNEL_BUILD" \
+sudo make --no-print-directory -C "$KERNEL_SRC" \
     ARCH=x86 CC="$KERNEL_CC" HOSTCC="$KERNEL_CC" \
     INSTALL_MOD_PATH="$mount_dir" INSTALL_MOD_STRIP=1 modules_install
 release=$(cat "$KERNEL_BUILD/include/config/kernel.release")
@@ -98,4 +98,4 @@ if [[ $update_modules == n ]]; then
 fi
 printf '%s\n' "$release" > "$ROOTFS_IMAGE.kernel-release"
 log "Guest image ready for $release: $ROOTFS_IMAGE"
-log 'Next: bash labs/scripts/run-qemu.sh'
+log "Next: ./boot linux-$KERNEL_VERSION"

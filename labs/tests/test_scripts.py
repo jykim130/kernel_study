@@ -3,11 +3,14 @@
 Lifecycle tests use isolated project copies and fake privileged commands.
 The production Linux guard is bypassed only in those disposable copies.
 """
+import hashlib
+import io
 import os
 from pathlib import Path
 import shlex
 import shutil
 import subprocess
+import tarfile
 import tempfile
 import unittest
 
@@ -24,13 +27,14 @@ BASH = BASH or shutil.which("bash")
 @unittest.skipUnless(BASH, "Bash is required")
 class ScriptTests(unittest.TestCase):
     def setUp(self):
-        cache = PROJECT / ".cache"
-        cache.mkdir(exist_ok=True)
-        self.temp = tempfile.TemporaryDirectory(prefix="test lab, ", dir=cache)
+        self.temp = tempfile.TemporaryDirectory(prefix="test lab, ")
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.repo = Path(self.temp.name)
+        self.root = self.repo / "labs"
+        self.root.mkdir()
         for directory in ("config", "scripts"):
             shutil.copytree(PROJECT / directory, self.root / directory)
+        shutil.copy2(PROJECT.parent / "boot", self.repo / "boot")
         self.bin = self.root / "mock-bin"
         self.bin.mkdir()
         self.calls = self.root / "calls.log"
@@ -51,7 +55,7 @@ class ScriptTests(unittest.TestCase):
                 handle.write('''PROJECT_ROOT=.
 CACHE_DIR=./.cache
 KERNEL_SRC=./src/linux-5.15.2
-KERNEL_BUILD=./build/linux-5.15.2
+KERNEL_BUILD="$KERNEL_SRC"
 IMAGE_DIR=./images
 ROOTFS_IMAGE=./images/rootfs.img
 LOG_DIR=./logs
@@ -67,13 +71,13 @@ LOG_DIR=./logs
         # Construct PATH inside Bash so both Windows and Linux path formats work.
         return subprocess.run(
             [BASH, "-c", 'export PATH="$PWD/mock-bin:$PATH"; exec bash "$@"',
-             "test", str(self.root / "scripts" / script), *args],
+             "test", str(self.repo / "boot" if script == "boot" else self.root / "scripts" / script), *args],
             cwd=self.root, env=env, text=True, encoding="utf-8", errors="replace",
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20,
         )
 
     def built_kernel(self):
-        build = self.root / "build/linux-5.15.2"
+        build = self.root / "src/linux-5.15.2"
         for filename, text in {
             "arch/x86/boot/bzImage": "test-image",
             "include/config/kernel.release": "5.15.2-kernel-study\n",
@@ -92,7 +96,7 @@ LOG_DIR=./logs
         return image
 
     def test_shell_syntax_and_lf(self):
-        for path in list((PROJECT / "scripts").glob("*.sh")) + list((PROJECT / "config").glob("*.sh")):
+        for path in [PROJECT.parent / "boot"] + list((PROJECT / "scripts").glob("*.sh")) + list((PROJECT / "config").glob("*.sh")):
             with self.subTest(path=path.name):
                 result = subprocess.run([BASH, "-n", str(path)], capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -129,6 +133,33 @@ LOG_DIR=./logs
         self.assertIn("-snapshot", args)
         self.assertEqual(args[args.index("-m") + 1], "2048")
         self.assertEqual(args[args.index("-smp") + 1], "3")
+
+    def test_boot_selects_in_tree_kernel_and_forwards_debug_options(self):
+        result = self.invoke("boot", "linux-5.15.2", "--dry-run", "--debug",
+                             "--snapshot", "--gdb-port", "1235")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        args = shlex.split(result.stdout)
+        self.assertTrue(args[args.index("-kernel") + 1].endswith(
+            "/src/linux-5.15.2/arch/x86/boot/bzImage"))
+        self.assertEqual(args[args.index("-gdb") + 1], "tcp:127.0.0.1:1235")
+        self.assertIn("-snapshot", args)
+        self.assertIn("-S", args)
+        self.assertFalse((self.root / "src").exists())
+        self.assertFalse((self.root / "images").exists())
+
+    def test_boot_help_and_kernel_name_validation_need_no_artifacts(self):
+        result = self.invoke("boot", "--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Usage: ./boot linux-5.15.2", result.stdout)
+        result = self.invoke("boot")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Usage:", result.stderr)
+        for name in ("linux-5.15.4", "../linux-5.15.2", "--debug"):
+            with self.subTest(name=name):
+                result = self.invoke("boot", name, "--dry-run")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Kernel must match", result.stderr)
+        self.assertFalse(self.calls.exists())
 
     def test_invalid_options_are_rejected_before_launch(self):
         for args in (("--accel",), ("--accel", "invalid"), ("--gdb-port", "0"),
@@ -169,7 +200,7 @@ LOG_DIR=./logs
         self.simulate_linux()
         self.built_kernel()
         self.image()
-        result = self.invoke("run-qemu.sh", MOCK_QEMU_EXIT="7")
+        result = self.invoke("boot", "linux-5.15.2", MOCK_QEMU_EXIT="7")
         self.assertEqual(result.returncode, 7, result.stderr)
         self.assertIn("qemu", self.calls.read_text())
         self.assertTrue(list((self.root / "logs").glob("qemu-*.log")))
@@ -228,6 +259,90 @@ esac''')
         self.assertIn("FAILED", result.stdout + result.stderr)
         self.assertFalse((self.root / "src/linux-5.15.2").exists())
         self.assertFalse(self.calls.exists())
+
+
+
+    @staticmethod
+    def boot_config():
+        return """CONFIG_VIRTIO_PCI=y
+CONFIG_VIRTIO_BLK=y
+CONFIG_EXT4_FS=y
+CONFIG_DEVTMPFS=y
+CONFIG_DEVTMPFS_MOUNT=y
+CONFIG_SERIAL_8250_CONSOLE=y
+CONFIG_LOCALVERSION="-kernel-study"
+"""
+
+    def prepare_fake_kernel_build(self, config=None, with_source=True):
+        self.simulate_linux()
+        for name in ("gcc-11", "bison", "flex", "bc"):
+            self.mock(name, "exit 0")
+        self.mock("curl", "exit 99")  # These tests never download anything.
+        if with_source:
+            source = self.root / "src/linux-5.15.2"
+            source.mkdir(parents=True)
+            (source / "Makefile").write_text("# kernel source fixture\n", encoding="utf-8")
+            if config is not None:
+                (source / ".config").write_text(config, encoding="utf-8", newline="\n")
+        self.mock("make", '''
+if printenv KBUILD_OUTPUT >/dev/null; then exit 96; fi
+for arg in "$@"; do
+    [[ $arg != O=* ]] || exit 97
+done
+echo "$*" >> "$MOCK_CALLS"
+if [[ " $* " == *" bzImage modules "* ]]; then
+    mkdir -p src/linux-5.15.2/arch/x86/boot src/linux-5.15.2/include/config
+    echo test-image > src/linux-5.15.2/arch/x86/boot/bzImage
+    echo 5.15.2-kernel-study > src/linux-5.15.2/include/config/kernel.release
+    touch src/linux-5.15.2/modules.order
+fi
+''')
+
+    def test_separate_build_config_is_reused_without_redirecting_output(self):
+        self.prepare_fake_kernel_build()
+        legacy = self.root / "build/linux-5.15.2/.config"
+        legacy.parent.mkdir(parents=True)
+        config = self.boot_config() + "CONFIG_TEST_PREVIOUS_SETTING=y\n"
+        legacy.write_text(config, encoding="utf-8", newline="\n")
+        result = self.invoke("build-kernel.sh", KBUILD_OUTPUT=str(self.root / "obsolete-output"))
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        source = self.root / "src/linux-5.15.2"
+        self.assertEqual((source / ".config").read_text(encoding="utf-8"), config)
+        self.assertEqual(legacy.read_text(encoding="utf-8"), config)
+        self.assertTrue((source / "arch/x86/boot/bzImage").is_file())
+        self.assertFalse((self.root / "obsolete-output").exists())
+
+    def test_existing_source_config_takes_precedence_over_old_build(self):
+        config = self.boot_config() + "CONFIG_TEST_CURRENT_SETTING=y\n"
+        self.prepare_fake_kernel_build(config=config)
+        legacy = self.root / "build/linux-5.15.2/.config"
+        legacy.parent.mkdir(parents=True)
+        legacy.write_text("old configuration must not replace current settings\n", encoding="utf-8", newline="\n")
+        result = self.invoke("build-kernel.sh")
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertEqual((self.root / "src/linux-5.15.2/.config").read_text(encoding="utf-8"), config)
+
+    def test_first_build_extracts_sources_before_building_in_tree(self):
+        self.prepare_fake_kernel_build(with_source=False)
+        cache = self.root / ".cache"
+        cache.mkdir()
+        archive = cache / "linux-5.15.2.tar.xz"
+        with tarfile.open(archive, "w:xz") as output:
+            for name, text in {"Makefile": "# kernel source fixture\n", ".config": self.boot_config()}.items():
+                data = text.encode("utf-8")
+                entry = tarfile.TarInfo("linux-5.15.2/" + name)
+                entry.size = len(data)
+                output.addfile(entry, io.BytesIO(data))
+        digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+        settings = self.root / "config/lab.conf.sh"
+        settings.write_text(settings.read_text(encoding="utf-8") + f'\nKERNEL_SHA256={digest}\n',
+                            encoding="utf-8", newline="\n")
+        result = self.invoke("build-kernel.sh")
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        source = self.root / "src/linux-5.15.2"
+        self.assertEqual((source / "Makefile").read_text(encoding="utf-8"), "# kernel source fixture\n")
+        self.assertTrue((source / "arch/x86/boot/bzImage").is_file())
+        self.assertFalse((self.root / "build").exists())
 
 
 if __name__ == "__main__":
