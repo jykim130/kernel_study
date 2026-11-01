@@ -151,35 +151,7 @@ make boot
 새 `.c` 파일을 추가하면 해당 Makefile/Kbuild에도 등록합니다.
 빌드 결과가 갱신되면 initramfs의 커널 모듈도 다시 패키징됩니다.
 
-## 6. UPB 실습 코드 전달
-
-[공식 UPB Lab](https://linux-kernel-labs.github.io/refs/heads/master/so2/index.html)의
-스켈레톤을 `labs/<이름>/`에 둡니다. 현재 저장소에는 스켈레톤이나 완성 답안은 없습니다.
-외부 커널 모듈용 Makefile/Kbuild가 있는 `labs/my-module/`이라면:
-
-```bash
-make lab LAB=my-module
-make boot
-```
-
-같은 커널 소스로 모듈을 빌드하고 `overlay/root/labs/my-module/`에 준비합니다.
-`.git`과 중간 `.o` 파일은 제외합니다. 이 overlay 하위 트리는 생성물이므로
-직접 편집하지 않고 호스트의 원본 `labs/`를 수정합니다.
-게스트에서는 실제 모듈 이름에 맞춰 실행합니다.
-
-```bash
-cd /root/labs/my-module
-insmod my_module.ko
-dmesg | tail
-rmmod my_module
-```
-
-이미 빌드한 파일만 전달하려면 `make stage LAB=my-module`을 사용합니다.
-사용자 프로그램은 호스트에서 별도로 빌드한 뒤 함께 전달합니다.
-UPB의 공식 VM용 `make build`·`make copy`·`make boot`는 이 환경에서 각각의
-빌드·전달·실행 절차로 연결합니다. Linux 5.15.2와 스켈레톤의 API 차이는 확인해야 합니다.
-
-## 7. 패키지와 개인 설정
+## 6. 패키지와 개인 설정
 
 ```bash
 make rebuild EXTRA_PACKAGES=less,netcat-openbsd
@@ -202,7 +174,7 @@ EXTRA_PACKAGES = less,netcat-openbsd
 설정 변경 후 `make rebuild`를 실행합니다. 파일은 게스트와 같은 경로로
 overlay에 둡니다. 예를 들어 `overlay/root/test.txt`는 `/root/test.txt`가 됩니다.
 
-## 8. GDB 디버깅
+## 7. GDB 디버깅
 
 터미널 A에서 `make debug`를 실행합니다. 터미널 B도 같은 `kernel-utils/`로
 이동한 뒤 `make gdb`를 실행합니다. GDB에서:
@@ -218,7 +190,7 @@ overlay에 둡니다. 예를 들어 `overlay/root/test.txt`는 `/root/test.txt`�
 다른 포트는 양쪽 명령 모두 `GDB_PORT=1235`로 지정합니다.
 기본 디버그 인자에는 `nokaslr`, `panic=-1`, `oops=panic`이 포함됩니다.
 
-## 9. 가상 디스크 추가
+## 8. 가상 디스크 추가
 
 파일시스템 실습이나 영구 저장이 필요할 때 새 raw 디스크를 만듭니다.
 아래 생성 명령은 이미지가 없을 때만 실행합니다.
@@ -242,22 +214,7 @@ UPB minfs는 ext4 대신 실습의 `mkfs.minfs`로 포맷합니다.
 루트는 initramfs로 유지하고 추가 디스크만 마운트합니다.
 영구 이미지는 정리 대상인 `out/` 바깥, `disks/`에 보관합니다.
 
-## 10. Lab별 추가 준비
-
-| 실습 | 필요한 추가 설정 |
-|---|---|
-| Lab 01~03, 05~06 | 실습별 커널 옵션·모듈·사용자 프로그램 |
-| Lab 04 키보드 IRQ | `qemu-system-gui`를 추가 설치하고 `local.mk`에 `QEMU_CONSOLE_ARGS = -display gtk -serial mon:stdio` 지정. 시리얼 입력은 키보드 IRQ가 아님 |
-| Lab 07~09 | RAM 디스크 드라이버 또는 별도 디스크, 관련 도구·커널 옵션 |
-| Lab 10 | 네트워크 주소·장치, Netfilter 등 커널 옵션 |
-| Lab 11 | ARM32 i.MX6UL용 커널·DTB·실행 설정 별도 준비 |
-| Lab 12 | perf 등 도구와 커널 옵션, 가상환경의 이벤트 지원 확인 |
-
-현재 준비 스크립트는 x86-64용이며 ARM32 지원을 구현한 상태는 아닙니다.
-원본의 ARM64 `virt`도 UPB의 i.MX6UL을 그대로 대체하지 않습니다.
-TCG의 성능 수치와 PMU 지원은 실제 하드웨어와 다르므로 프로파일링 실습에서 확인합니다.
-
-## 11. 기존 환경 자료 재사용
+## 9. 기존 환경 자료 재사용
 
 기존 Ubuntu 체크아웃에 수정한 커널·디스크가 있다면 새 위치가 비었는지 확인하고
 아래 대상으로 이동합니다. 기존의 무시된 데이터는 Git 업데이트로 자동 이동하지 않습니다.
@@ -271,7 +228,7 @@ TCG의 성능 수치와 PMU 지원은 실제 하드웨어와 다르므로 프로
 initramfs에 넣지 않고, 나중에 데이터 디스크로 연결해 파일을 꺼낼 수 있습니다.
 이전 로그·별도 빌드 자료는 보존 여부를 확인한 뒤 사용자가 정리합니다.
 
-## 12. 정리와 테스트
+## 10. 정리와 테스트
 
 ```bash
 make clean       # 현재 아키텍처의 out 하위 생성물 삭제
@@ -288,7 +245,6 @@ UPB 전체 실습 완료 검증을 대신하지는 않습니다.
 ## 참고
 
 - [원본 kernel-utils](https://github.com/aweeraman/kernel-utils)
-- [UPB SO2 실습](https://linux-kernel-labs.github.io/refs/heads/master/so2/index.html)
 - [Linux 5.15 빌드 요구 사항](https://docs.kernel.org/5.15/process/changes.html)
 - [initramfs 설명](https://docs.kernel.org/5.15/filesystems/ramfs-rootfs-initramfs.html)
 - [Debian 공식 서명 키](https://ftp-master.debian.org/keys.html)
