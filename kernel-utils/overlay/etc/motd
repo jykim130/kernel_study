@@ -1,0 +1,3 @@
+kernel-study: Linux kernel lab guest (initramfs)
+Files changed in this root filesystem are discarded at the next boot.
+Keep source code on the Ubuntu host; use /root/labs for staged lab files.

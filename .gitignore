@@ -1,3 +1,18 @@
+/kernel-utils/.cache/
+/kernel-utils/linux-*/
+/kernel-utils/out/
+/kernel-utils/local.mk
+/kernel-utils/overlay/root/labs/
+/kernel-utils/disks/*
+!/kernel-utils/disks/README.md
+**/*.ko
+**/*.o
+**/*.mod
+**/*.mod.c
+**/.*.cmd
+**/Module.symvers
+**/modules.order
+# Preserve exclusions for ignored data left in older Ubuntu checkouts.
 /labs/.cache/
 /labs/src/
 /labs/build/

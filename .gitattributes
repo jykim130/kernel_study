@@ -2,4 +2,9 @@
 *.sh text eol=lf
 *.md text eol=lf
 *.py text eol=lf
-/boot text eol=lf
+Makefile text eol=lf
+*.mk text eol=lf
+*.mk.example text eol=lf
+COPYING text eol=lf
+*.txt text eol=lf
+/kernel-utils/overlay/etc/motd text eol=lf

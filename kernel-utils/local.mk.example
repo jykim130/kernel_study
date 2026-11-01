@@ -1,0 +1,10 @@
+# Copy to local.mk; this local file is not tracked by Git.
+SUITE = bookworm
+QEMU_MEMORY = 2G
+QEMU_CPUS = 2
+# EXTRA_PACKAGES = less,netcat-openbsd
+# DISK = /home/your-name/work/kernel_study/kernel-utils/disks/lab.img
+# ACCEL = kvm
+# QEMU_CPU = host
+# For keyboard IRQ labs, install qemu-system-gui and enable a graphical display:
+# QEMU_CONSOLE_ARGS = -display gtk -serial mon:stdio

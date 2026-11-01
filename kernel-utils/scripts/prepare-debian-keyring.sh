@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 source "$(dirname -- "${BASH_SOURCE[0]}")/common.sh"
 if [[ ${1:-} == --help ]]; then
-    echo 'Usage: bash labs/scripts/prepare-debian-keyring.sh'
+    echo 'Usage: bash scripts/prepare-debian-keyring.sh'
     exit 0
 fi
 (( $# == 0 )) || die 'Unexpected argument. Use --help.'
