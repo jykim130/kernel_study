@@ -39,7 +39,7 @@ boot-log: check-linux check-output-path
 # parent directory mtime. Package additions can also be forced with make rebuild.
 OVERLAY_INPUTS := $(shell find "$(ROOTFS_OVERLAY)" -type f -o -type d 2>/dev/null)
 KERNEL_MODULE_INPUTS := $(wildcard $(addprefix $(KERNELSRC)/,$(shell cat "$(MODULES_ORDER)" 2>/dev/null)))
-$(INITRAMFS): Makefile study.mk $(wildcard local.mk) $(OVERLAY_INPUTS) $(KERNEL_MODULE_INPUTS)
+$(INITRAMFS): Makefile study.mk scripts/run-mmdebstrap.sh $(wildcard local.mk) $(OVERLAY_INPUTS) $(KERNEL_MODULE_INPUTS)
 
 lab: check-kernel
 	bash scripts/stage-lab.sh --build

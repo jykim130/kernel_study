@@ -278,7 +278,7 @@ $(INITRAMFS): $(KERNEL_BUILD_INPUTS) $(MAKEFILE_SELF) | check-image $(OUTPUT_DIR
 	rm -f "$(ROOTFS)"
 	$(MAKE) copy-modules
 
-	mmdebstrap $(MMDEBSTRAP_FLAGS) --architectures="$(DEBIAN_ARCH)" \
+	bash scripts/run-mmdebstrap.sh $(MMDEBSTRAP_FLAGS) --architectures="$(DEBIAN_ARCH)" \
 		--mode=unshare --variant="$(VARIANT)" \
 		--include="$(INCLUDEPKGS)" \
 		--aptopt='APT::Sandbox::User "root"' \

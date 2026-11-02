@@ -87,6 +87,11 @@ done < "$input"
         self.mock('mmdebstrap', '''
 printf '%s\\0' "$@" > "$MOCK_STATE/pack-args"
 printf '%s' "$INIT" > "$MOCK_STATE/guest-init"
+for arg in "$@"; do
+    if [[ $arg == --keyring=* ]]; then
+        cat -- "${arg#--keyring=}" > "$MOCK_STATE/used-keyring"
+    fi
+done
 echo pack >> "$MOCK_STATE/events"
 args=("$@")
 printf rootfs > "${args[${#args[@]}-2]}"
@@ -219,7 +224,9 @@ modules:
         self.mock_key_downloads()
         self.success(self.invoke('image'))
         self.assertEqual(self.keyring.read_text().splitlines(), list(BOOKWORM_KEYS.values()))
-        self.assertIn('--keyring=' + self.keyring.as_posix(), self.args('pack-args'))
+        keyring_arg = next(x for x in self.args('pack-args') if x.startswith('--keyring='))
+        self.assertTrue(keyring_arg.startswith('--keyring=/tmp/kernel-study-bootstrap.'))
+        self.assertEqual((self.root / 'used-keyring').read_text(), self.keyring.read_text())
         self.success(self.invoke('image'))
         self.assertEqual((self.root / 'events').read_text().splitlines().count('key-download'), 3)
         self.assertFalse(list((self.root / '.cache').glob('debian-keys.*')))
@@ -364,6 +371,88 @@ modules:
                 result = subprocess.run([BASH, '-n', str(path)], capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertNotIn(b'\r\n', path.read_bytes())
+
+
+@unittest.skipUnless(
+    os.name == 'posix' and hasattr(os, 'geteuid') and os.geteuid() == 0
+    and all(shutil.which(tool) for tool in ('bash', 'gpg', 'gpgv', 'gpgconf', 'setpriv')),
+    'Real keyring access regression requires Linux root, GnuPG and setpriv')
+class KeyringAccessTests(unittest.TestCase):
+    def test_private_home_does_not_hide_keyring_from_verification_uid(self):
+        temp = tempfile.TemporaryDirectory(prefix='kernel-study-access-')
+        self.addCleanup(temp.cleanup)
+        base = Path(temp.name)
+        base.chmod(0o755)
+        private = base / 'private-home'
+        private.mkdir(mode=0o750)
+        root = private / 'kernel-utils'
+        scripts = root / 'scripts'
+        scripts.mkdir(parents=True)
+        for name in ('common.sh', 'run-mmdebstrap.sh'):
+            shutil.copy2(PROJECT / 'scripts' / name, scripts / name)
+        # Only this disposable fixture permits the root needed by setpriv.
+        with (scripts / 'common.sh').open('a', encoding='utf-8') as f:
+            f.write('\nrequire_linux() { :; }\n')
+
+        gnupg = private / 'gnupg'
+        gnupg.mkdir(mode=0o700)
+        self.addCleanup(subprocess.run, ['gpgconf', '--homedir', str(gnupg), '--kill', 'gpg-agent'],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        gpg = ['gpg', '--batch', '--no-options', '--homedir', str(gnupg),
+               '--pinentry-mode', 'loopback', '--passphrase', '']
+        result = subprocess.run(gpg + ['--quick-generate-key', 'kernel-study fixture', 'ed25519', 'sign', '1d'],
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        keyring = root / 'debian-bookworm.gpg'
+        with keyring.open('wb') as f:
+            subprocess.run(gpg + ['--export'], stdout=f, stderr=subprocess.PIPE, check=True, timeout=15)
+        keyring.chmod(0o644)
+        release = base / 'Release'
+        release.write_text('Permission regression fixture\n', encoding='utf-8')
+        signature = base / 'Release.gpg'
+        subprocess.run(gpg + ['--output', str(signature), '--detach-sign', str(release)],
+                       capture_output=True, check=True, timeout=15)
+        release.chmod(0o644)
+        signature.chmod(0o644)
+
+        mock_bin = base / 'bin'
+        mock_bin.mkdir()
+        mock = mock_bin / 'mmdebstrap'
+        mock.write_text('''#!/usr/bin/env bash
+set -euo pipefail
+for arg in "$@"; do
+    if [[ $arg == --keyring=* ]]; then keyring=${arg#--keyring=}; fi
+done
+printf '%s\\n%s\\n' "$keyring" "$HOME" > "$ACCESS_STATE"
+exec setpriv --reuid=65534 --regid=65534 --clear-groups \\
+    gpgv --homedir "$HOME" --status-fd=1 --keyring "$keyring" "$ACCESS_SIGNATURE" "$ACCESS_RELEASE"
+''', encoding='utf-8', newline='\n')
+        mock.chmod(0o755)
+        env = os.environ.copy()
+        env.update(PATH=str(mock_bin) + os.pathsep + env['PATH'],
+                   ACCESS_STATE=str(base / 'access-state'), ACCESS_SIGNATURE=str(signature),
+                   ACCESS_RELEASE=str(release))
+
+        for mode, key_args in ((0o700, ['--keyring=' + str(keyring)]),
+                               (0o750, ['--keyring', str(keyring)])):
+            with self.subTest(mode=oct(mode)):
+                private.chmod(mode)
+                direct = subprocess.run(
+                    ['setpriv', '--reuid=65534', '--regid=65534', '--clear-groups', 'gpgv',
+                     '--homedir', str(base), '--status-fd=1', '--keyring', str(keyring),
+                     str(signature), str(release)], capture_output=True, text=True, timeout=15)
+                self.assertNotEqual(direct.returncode, 0)
+                self.assertIn('NO_PUBKEY', direct.stdout)
+                wrapped = subprocess.run(['bash', str(scripts / 'run-mmdebstrap.sh'), *key_args],
+                                         env=env, capture_output=True, text=True, timeout=15)
+                self.assertEqual(wrapped.returncode, 0, wrapped.stdout + wrapped.stderr)
+                self.assertIn('VALIDSIG', wrapped.stdout)
+                staged, child_home = (base / 'access-state').read_text().splitlines()
+                self.assertTrue(staged.startswith('/tmp/kernel-study-bootstrap.'))
+                self.assertFalse(Path(staged).exists())
+                self.assertFalse(Path(child_home).exists())
+                self.assertEqual(private.stat().st_mode & 0o777, mode)
+                self.assertEqual(keyring.stat().st_mode & 0o777, 0o644)
 
 
 if __name__ == '__main__':
