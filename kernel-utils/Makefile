@@ -10,7 +10,7 @@ SUITE ?= bookworm
 GUEST_SHELL ?= /bin/bash
 EXTRA_PACKAGES ?=
 comma := ,
-INCLUDEPKGS ?= bash,strace,kmod,util-linux,e2fsprogs,iproute2,iputils-ping,procps,vim-tiny,ca-certificates,udhcpc$(if $(strip $(EXTRA_PACKAGES)),$(comma)$(EXTRA_PACKAGES))
+INCLUDEPKGS ?= bash,strace,kmod,util-linux,e2fsprogs,iproute2,iputils-ping,procps,vim-tiny,ca-certificates,debian-archive-keyring,udhcpc$(if $(strip $(EXTRA_PACKAGES)),$(comma)$(EXTRA_PACKAGES))
 INSTALL_MOD_STRIP ?= 1
 export INSTALL_MOD_STRIP
 ROOTFS_OVERLAY ?= $(CURDIR)/overlay

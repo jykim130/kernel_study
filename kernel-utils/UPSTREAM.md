@@ -17,6 +17,10 @@ The wrapper stages public keyrings in a temporary, traversable directory so
 apt's verification UID can read them even when the host home has mode 0700 or
 0750. It also gives the child a temporary HOME and removes the staged files
 when mmdebstrap exits. Host directory permissions stay unchanged.
+For a mirror URL, it also pins the provided key fingerprints with an explicit
+signed-by repository entry. This prevents mmdebstrap 0.8.4 from choosing the
+host's older Debian keyring instead. The guest includes debian-archive-keyring
+and its repository entry contains no temporary host paths.
 All original packaging, QEMU, debugging and cleanup recipes remain in this file.
 `Makefile` supplies project defaults, and `study.mk` adds preparation, lab staging,
 configuration checks and the guest init hook. No nested Git repository or Git

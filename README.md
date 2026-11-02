@@ -112,6 +112,9 @@ Debian Bookworm 사용자 공간, 빌드한 커널 모듈, `overlay/`의 파일�
 따로 키 준비 스크립트를 실행하거나 `--keyring` 옵션을 지정할 필요는 없습니다.
 빌드 중에는 공개키를 `/tmp`의 임시 위치에 복사해 `mmdebstrap` 내부에서도 읽게 합니다.
 홈 디렉터리가 `700`·`750`이어도 사용할 수 있으며, 빌드가 끝나면 임시 키는 제거합니다.
+Ubuntu 22.04의 `mmdebstrap`이 오래된 시스템 키링을 자동 선택하지 않도록,
+저장소의 `signed-by`에도 검증한 키의 fingerprint를 명시합니다.
+게스트에는 `debian-archive-keyring`을 포함해 부팅 후에도 같은 키로 저장소를 검증합니다.
 모듈은 이미지에 설치할 때 strip하고 호스트의 원본 `.ko`는 보존합니다.
 
 `make boot`는 `bzImage`와 initramfs로 QEMU를 부팅합니다. 이미지가 없거나

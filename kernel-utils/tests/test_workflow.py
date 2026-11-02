@@ -240,6 +240,23 @@ modules:
                 self.success(self.invoke('rebuild'))
                 self.assertEqual(self.keyring.read_text().splitlines(), list(BOOKWORM_KEYS.values()))
 
+    def test_repository_pins_provided_keys_instead_of_host_keyring(self):
+        self.built_kernel()
+        flags = '--keyring=' + self.keyring.as_posix() + ' --components=main,contrib'
+        self.success(self.invoke('image', 'MMDEBSTRAP_FLAGS=' + flags))
+        mirror = self.args('pack-args')[-1]
+        self.assertEqual(mirror, 'deb [signed-by=' + ','.join(BOOKWORM_KEYS.values())
+                         + '] http://deb.debian.org/debian bookworm main contrib')
+        self.assertNotIn('/tmp/', mirror)
+        include = next(x for x in self.args('pack-args') if x.startswith('--include='))
+        self.assertIn('debian-archive-keyring', include)
+
+    def test_explicit_repository_entry_is_preserved(self):
+        self.built_kernel()
+        mirror = 'deb [signed-by=/usr/share/keyrings/custom.gpg] https://example.invalid/debian bookworm main'
+        self.success(self.invoke('image', 'MIRROR=' + mirror))
+        self.assertEqual(self.args('pack-args')[-1], mirror)
+
     def test_wrong_downloaded_key_stops_before_packaging(self):
         self.built_kernel()
         self.keyring.write_text('corrupt', encoding='utf-8')
