@@ -87,14 +87,12 @@ cd ..
 ```bash
 make print-config
 make image
-make boot
+make boot 
 ```
 
-`make boot`는 `bzImage`와 initramfs로 QEMU를 부팅합니다. 이미지가 없거나
-커널 결과·설정·overlay가 바뀌면 다시 패키징합니다. root로 자동 로그인합니다.
-virtio NIC와 QEMU user networking을 사용하고 게스트의 `/init`에서 DHCP를 시도합니다.
+`make boot`는 `bzImage`와 initramfs로 QEMU를 부팅합니다. 로그인 창이 나오면, `root`를 입력, 비밀번호는 `kernel`입니다.
 
-게스트에서 확인합니다.
+성공적으로 QEMU가 부팅되면 게스트에서 아래 내용을 확인합니다.
 
 ```bash
 uname -r // 5.15.2-kernel-study가 나오는지 확인합니다.
