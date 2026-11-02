@@ -5,13 +5,15 @@ UPB에서 받은 실습 스켈레톤을 이 디렉토리 아래에 둡니다.
 
 ```bash
 make lab LAB=my-module
+make update-image   # 첫 이미지가 없으면 make image
 make boot
 ```
 
 `lab`은 선택한 디렉토리를 외부 커널 모듈로 빌드한 뒤 게스트에 전달합니다.
 커널 외부 모듈용 Makefile/Kbuild가 있어야 하며, UPB의 VM 실행용 Makefile을
 대신 실행하는 명령은 아닙니다. 사용자 프로그램과 테스트 도구는 호스트에서
-별도로 빌드한 뒤 `make stage LAB=my-module`로 함께 전달할 수 있습니다.
+별도로 빌드한 뒤 `make stage LAB=my-module`, `make update-image`로 함께 전달할 수 있습니다.
+이미지 갱신 전에는 게스트에서 `poweroff`로 QEMU를 종료합니다.
 
 게스트에서는 `/root/labs/my-module/`에서 파일을 찾습니다.
 공식 과제의 TODO와 테스트 순서는 그대로 따르되 커널 버전별 API 차이를 확인합니다.

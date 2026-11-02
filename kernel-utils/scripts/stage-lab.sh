@@ -28,4 +28,4 @@ mkdir -p "$(dirname -- "$dest")"
 [[ ! -e $dest ]] || rm -rf -- "$dest"
 mv -- "$tmp" "$dest"
 trap - EXIT
-log "Staged $LAB at /root/labs/$LAB. Next: make boot"
+log "Staged $LAB at /root/labs/$LAB. Next: make update-image (or make image for the first boot), then make boot."

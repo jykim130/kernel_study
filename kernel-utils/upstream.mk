@@ -25,7 +25,6 @@ QEMU_ARCH             := aarch64
 QEMU_MACHINE          := virt
 CONSOLE               := ttyAMA0
 KERNEL_FILE           := arch/arm64/boot/Image
-KERNEL_ARGS           := console=$(CONSOLE) earlycon rdinit=/init
 else ifeq ($(TARGET_ARCH),amd64)
 KERNEL_ARCH           := x86
 DEBIAN_ARCH           := amd64
@@ -33,7 +32,6 @@ QEMU_ARCH             := x86_64
 QEMU_MACHINE          := q35
 CONSOLE               := ttyS0
 KERNEL_FILE           := arch/x86/boot/bzImage
-KERNEL_ARGS           := console=$(CONSOLE) earlyprintk=serial rdinit=/init
 else ifeq ($(TARGET_ARCH),riscv64)
 KERNEL_ARCH           := riscv
 DEBIAN_ARCH           := riscv64
@@ -41,7 +39,6 @@ QEMU_ARCH             := riscv64
 QEMU_MACHINE          := virt
 CONSOLE               := ttyS0
 KERNEL_FILE           := arch/riscv/boot/Image
-KERNEL_ARGS           := console=$(CONSOLE) earlycon=sbi rdinit=/init
 else
 $(error Unsupported target architecture: $(TARGET_ARCH))
 endif
@@ -62,8 +59,6 @@ KERNELIMG            ?= $(KERNELSRC)/$(KERNEL_FILE)
 VMLINUX              ?= $(KERNELSRC)/vmlinux
 KERNEL_RELEASE       ?= $(KERNELSRC)/include/config/kernel.release
 MODULES_ORDER        ?= $(KERNELSRC)/modules.order
-KERNEL_BUILD_INPUTS  := $(wildcard $(KERNELIMG) $(KERNEL_RELEASE) $(MODULES_ORDER))
-MAKEFILE_SELF        := $(lastword $(MAKEFILE_LIST))
 
 ifneq ($(wildcard $(MODULES_ORDER)),)
 HAVE_MODULES         := yes
@@ -77,7 +72,8 @@ OUTPUT_ROOT          ?= $(CURDIR)/out
 OUTPUT_DIR           ?= $(OUTPUT_ROOT)/$(TARGET_ARCH)
 MODULES_DIR          ?= $(OUTPUT_DIR)/modules
 ROOTFS               ?= $(OUTPUT_DIR)/rootfs.tar
-INITRAMFS            ?= $(OUTPUT_DIR)/initramfs.cpio
+ROOTFS_IMAGE         ?= $(CURDIR)/disks/rootfs.img
+ROOTFS_SIZE          ?= 4G
 SERIAL_LOG           ?= $(OUTPUT_DIR)/console.log
 ROOTFS_OVERLAY       ?=
 
@@ -103,37 +99,25 @@ HOST_DEPS := \
 
 .PHONY: \
 		help print-config check check-image check-boot check-apt \
-		check-gdb image copy-modules boot boot-log debug gdb \
+		check-gdb image rootfs update-image copy-modules boot boot-log debug gdb \
 		deps clean distclean rebuild
 
-define INIT
-#!/bin/sh
-set -eu
-
-mount -t proc proc /proc
-mount -t sysfs sys /sys
-mount -t devtmpfs dev /dev
-mount -t debugfs none /sys/kernel/debug
-
-hostname kernel-utils
-export TERM=xterm-256color
-
-exec agetty --autologin root --noclear $(CONSOLE) linux
-endef
-export INIT
+# Boot the persistent root disk directly; /sbin/init is supplied by systemd-sysv.
+KERNEL_ARGS = root=/dev/vda rootfstype=ext4 rw rootwait console=$(CONSOLE),115200
 
 help:
-	@echo "Package and boot an already-built Linux kernel with a Debian initramfs."
+	@echo "Package and boot an already-built Linux kernel with a persistent Debian ext4 disk."
 	@echo ""
 	@echo "Usage: make [target] [VARIABLE=value ...]"
 	@echo ""
 	@echo "Primary targets:"
-	@echo "  make image          Create the initramfs if it's missing"
+	@echo "  make image          Create the root disk only if it is missing"
+	@echo "  make update-image   Refresh kernel modules and overlay without resetting the disk"
 	@echo "  make boot           Boot the kernel with QEMU"
 	@echo "  make boot-log       Boot and write the serial console to a file"
 	@echo "  make debug          Boot paused and wait for GDB on port $(GDB_PORT)"
 	@echo "  make gdb            Connect GDB to the debug target"
-	@echo "  make rebuild        Recreate the initramfs from scratch"
+	@echo "  make rebuild        Create a fresh root disk; keep the previous disk as a backup"
 	@echo ""
 	@echo "Additional targets:"
 	@echo "  make deps           Install packaging, debug, and all guest runtime tools"
@@ -143,19 +127,21 @@ help:
 	@echo "  make distclean      Remove artifacts for all architectures"
 	@echo ""
 	@echo "Configuration variables:"
-	@echo "  TARGET_ARCH         Guest architecture: amd64, arm64, or riscv64"
+	@echo "  TARGET_ARCH         Guest architecture (this study workflow supports amd64)"
 	@echo "  KERNELSRC           Prepared kernel build tree"
 	@echo "  SUITE               Debian suite (default: $(SUITE))"
 	@echo "  VARIANT             mmdebstrap variant (default: $(VARIANT))"
 	@echo "  MIRROR              Debian mirror"
 	@echo "  INCLUDEPKGS         Additional guest packages"
 	@echo "  OUTPUT_ROOT         Root output directory"
+	@echo "  ROOTFS_IMAGE        Persistent root disk (default: $(ROOTFS_IMAGE))"
+	@echo "  ROOTFS_SIZE         New disk size (default: $(ROOTFS_SIZE))"
 	@echo "  QEMU_CPU            QEMU CPU model and features (default: $(QEMU_CPU))"
 	@echo "  QEMU_CPUS           Number of guest CPUs (default: $(QEMU_CPUS))"
 	@echo "  QEMU_MEMORY         Guest memory size (default: $(QEMU_MEMORY))"
 	@echo "  QEMU_EXTRA_ARGS     Additional QEMU command-line arguments"
 	@echo "  KERNEL_EXTRA_ARGS   Additional kernel command-line arguments"
-	@echo "  ROOTFS_OVERLAY      Directory to merge into the initramfs root"
+	@echo "  ROOTFS_OVERLAY      Directory to merge into the guest root"
 	@echo "  SERIAL_LOG          Serial log path"
 	@echo "  DEBUG_KERNEL_ARGS   Extra kernel arguments used by make debug"
 	@echo "  GDB_PORT            Debug target's GDB port (default: $(GDB_PORT))"
@@ -165,7 +151,6 @@ help:
 	@echo "Examples:"
 	@echo '  make image KERNELSRC=/path/to/linux SUITE=testing'
 	@echo '  make deps'
-	@echo '  make boot TARGET_ARCH=riscv64 KERNELSRC=/path/to/riscv64-build'
 	@echo '  make boot QEMU_CPU=max QEMU_CPUS=4 QEMU_MEMORY=4G'
 	@echo '  make boot KERNEL_EXTRA_ARGS="ignore_loglevel initcall_debug"'
 	@echo '  make boot QEMU_CPU=host QEMU_EXTRA_ARGS="-enable-kvm"'
@@ -185,7 +170,8 @@ print-config:
 	@echo "Install modules:      $(HAVE_MODULES)"
 	@echo "Output root:          $(OUTPUT_ROOT)"
 	@echo "Output directory:     $(OUTPUT_DIR)"
-	@echo "Initramfs:            $(INITRAMFS)"
+	@echo "Root disk:            $(ROOTFS_IMAGE)"
+	@echo "New disk size:        $(ROOTFS_SIZE)"
 	@echo "QEMU:                 $(QEMU)"
 	@echo "QEMU machine:         $(QEMU_MACHINE)"
 	@echo "QEMU CPU:             $(QEMU_CPU)"
@@ -206,10 +192,9 @@ check-image:
 		echo "error: mmdebstrap is not installed; run 'make deps'"; \
 		exit 1; \
 	}
-	@command -v bsdtar >/dev/null || { \
-		echo "error: bsdtar is not installed; run 'make deps'"; \
-		exit 1; \
-	}
+	@for tool in tar sudo mkfs.ext4 truncate mount umount mountpoint flock; do \
+		command -v "$$tool" >/dev/null || { echo "error: $$tool is not installed; run 'make deps'"; exit 1; }; \
+	done
 	@test -d "$(KERNELSRC)" || { \
 		echo "error: kernel build directory not found: $(KERNELSRC)"; \
 		echo "Set it with: make image KERNELSRC=/path/to/linux"; \
@@ -266,39 +251,43 @@ ifeq ($(HAVE_MODULES),yes)
 		INSTALL_MOD_PATH="$(MODULES_DIR)" \
 		modules_install
 else
-	@echo "No modules.order found; creating initramfs without kernel modules."
+	@echo "No modules.order found; creating image without kernel modules."
 endif
 
-image: $(INITRAMFS)
+image: check-image | $(OUTPUT_DIR)
+	bash scripts/manage-image.sh create
 
-rebuild: clean
-	$(MAKE) image
+update-image: check-image | $(OUTPUT_DIR)
+	bash scripts/manage-image.sh update
 
-$(INITRAMFS): $(KERNEL_BUILD_INPUTS) $(MAKEFILE_SELF) | check-image $(OUTPUT_DIR)
+rebuild: check-image | $(OUTPUT_DIR)
+	bash scripts/manage-image.sh rebuild
+
+# Called under the image lock by manage-image.sh when a new guest is needed.
+rootfs: check-image | $(OUTPUT_DIR)
 	rm -f "$(ROOTFS)"
 	$(MAKE) copy-modules
 
 	bash scripts/run-mmdebstrap.sh $(MMDEBSTRAP_FLAGS) --architectures="$(DEBIAN_ARCH)" \
-		--mode=unshare --variant="$(VARIANT)" \
+		--mode=unshare --format=tar --variant="$(VARIANT)" \
 		--include="$(INCLUDEPKGS)" \
 		--aptopt='APT::Sandbox::User "root"' \
-		--customize-hook='printf "%s\n" "$$INIT" > "$$1/init"' \
-		--customize-hook='chmod 0755 "$$1/init"' \
-		--customize-hook='chroot "$$1" chsh -s $(GUEST_SHELL) root' \
 		$(MODULES_COPY_ARG) \
-		$(ROOTFS_OVERLAY_ARG) "$(SUITE)" "$(ROOTFS)" "$(MIRROR)"
+		$(ROOTFS_OVERLAY_ARG) \
+		--customize-hook="copy-in '$(CURDIR)/scripts/configure-guest.sh' /tmp" \
+		--customize-hook='chroot "$$1" /bin/bash /tmp/configure-guest.sh' \
+		--customize-hook='rm -f "$$1/tmp/configure-guest.sh"' \
+		"$(SUITE)" "$(ROOTFS)" "$(MIRROR)"
 
-	bsdtar --format newc -cf "$@" @"$(ROOTFS)"
-	rm -rf "$(ROOTFS)" "$(MODULES_DIR)"
-
-boot: check-boot $(INITRAMFS)
-	$(QEMU) $(QEMU_EXTRA_ARGS) \
+boot: check-boot image
+	bash scripts/run-qemu.sh $(QEMU) \
+		-drive "file=$(ROOTFS_IMAGE),format=raw,if=virtio,index=0" \
+		$(QEMU_EXTRA_ARGS) \
 		-M "$(QEMU_MACHINE)" \
 		-cpu "$(QEMU_CPU)" -smp "$(QEMU_CPUS)" \
 		$(QEMU_CONSOLE_ARGS) -m "$(QEMU_MEMORY)" \
 		-kernel "$(KERNELIMG)" \
-		-initrd "$(INITRAMFS)" \
-		-append "$(KERNEL_ARGS) $(KERNEL_EXTRA_ARGS)"
+		-append "$(KERNEL_ARGS) $(KERNEL_EXTRA_ARGS)" -no-reboot
 
 boot-log:
 	mkdir -p "$(OUTPUT_DIR)"

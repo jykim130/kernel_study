@@ -1,4 +1,4 @@
-# Local preparation and lab delivery. Boot/image/debug recipes remain upstream.
+# Local preparation, persistent guest images and lab delivery.
 .NOTPARALLEL:
 
 # Ubuntu 22.04 x86-64 baseline; other guest architectures are opt-in later.
@@ -35,12 +35,6 @@ check-gdb: check-linux
 copy-modules: check-kernel check-output-path
 boot-log: check-linux check-output-path
 
-# Repackage after settings or staged lab files change. Removed files update the
-# parent directory mtime. Package additions can also be forced with make rebuild.
-OVERLAY_INPUTS := $(shell find "$(ROOTFS_OVERLAY)" -type f -o -type d 2>/dev/null)
-KERNEL_MODULE_INPUTS := $(wildcard $(addprefix $(KERNELSRC)/,$(shell cat "$(MODULES_ORDER)" 2>/dev/null)))
-$(INITRAMFS): Makefile study.mk scripts/run-mmdebstrap.sh $(wildcard local.mk) $(OVERLAY_INPUTS) $(KERNEL_MODULE_INPUTS)
-
 lab: check-kernel
 	bash scripts/stage-lab.sh --build
 
@@ -55,28 +49,6 @@ clean distclean: check-linux check-output-path
 check-output-path:
 	bash scripts/check-output-path.sh
 
-# Reuse the upstream INIT hook, adding loopback and best-effort guest DHCP.
-# This is the guest's /init, not a service installed on the Ubuntu host.
-define INIT
-#!/bin/sh
-set -eu
-mount -t proc proc /proc
-mount -t sysfs sys /sys
-mount -t devtmpfs dev /dev
-mount -t debugfs none /sys/kernel/debug
-hostname kernel-study
-export TERM=xterm-256color
-ip link set lo up
-for iface in /sys/class/net/*; do
-    name=$${iface##*/}
-    [ "$$name" = lo ] && continue
-    ip link set "$$name" up
-    udhcpc -n -q -i "$$name" || echo "DHCP unavailable; configure the network manually."
-    break
-done
-exec agetty --autologin root --noclear $(CONSOLE) linux
-endef
-
 help: study-help
 .PHONY: study-help
 study-help:
@@ -86,7 +58,8 @@ study-help:
 	@echo "  make kernel          Configure and build; manual make in the kernel tree also works"
 	@echo "  make lab LAB=name    Build external modules from labs/name and stage their files"
 	@echo "  make stage LAB=name  Stage already-built lab files without compiling"
+	@echo "  make update-image    Install rebuilt modules and overlay; preserve guest data"
 	@echo "  make test            Run isolated, unprivileged workflow tests"
 	@echo "  make boot DISK=/absolute/path/to/disk.img   Attach an existing raw disk"
-	@echo "  make rebuild EXTRA_PACKAGES=package1,package2   Add guest tools"
+	@echo "  make rebuild EXTRA_PACKAGES=package1,package2   Build a fresh guest; back up the old disk"
 	@echo "  Copy local.mk.example to local.mk for persistent local settings."

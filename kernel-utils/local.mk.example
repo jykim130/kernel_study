@@ -2,7 +2,10 @@
 SUITE = bookworm
 QEMU_MEMORY = 2G
 QEMU_CPUS = 2
+ROOTFS_SIZE = 4G
+# GUEST_ROOT_PASSWORD = kernel
 # EXTRA_PACKAGES = less,netcat-openbsd
+# ROOTFS_IMAGE = /home/your-name/work/kernel_study/kernel-utils/disks/rootfs.img
 # DISK = /home/your-name/work/kernel_study/kernel-utils/disks/lab.img
 # ACCEL = kvm
 # QEMU_CPU = host

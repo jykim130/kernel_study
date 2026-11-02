@@ -10,18 +10,22 @@ SUITE ?= bookworm
 GUEST_SHELL ?= /bin/bash
 EXTRA_PACKAGES ?=
 comma := ,
-INCLUDEPKGS ?= bash,strace,kmod,util-linux,e2fsprogs,iproute2,iputils-ping,procps,vim-tiny,ca-certificates,debian-archive-keyring,udhcpc$(if $(strip $(EXTRA_PACKAGES)),$(comma)$(EXTRA_PACKAGES))
+INCLUDEPKGS ?= bash,strace,systemd-sysv,udev,kmod,util-linux,e2fsprogs,iproute2,iputils-ping,procps,vim-tiny,ca-certificates,debian-archive-keyring$(if $(strip $(EXTRA_PACKAGES)),$(comma)$(EXTRA_PACKAGES))
 INSTALL_MOD_STRIP ?= 1
 export INSTALL_MOD_STRIP
 ROOTFS_OVERLAY ?= $(CURDIR)/overlay
 OUTPUT_ROOT ?= $(CURDIR)/out
+ROOTFS_IMAGE ?= $(CURDIR)/disks/rootfs.img
+ROOTFS_SIZE ?= 4G
+GUEST_HOSTNAME ?= kernel-study
+GUEST_ROOT_PASSWORD ?= kernel
 QEMU_MEMORY ?= 2G
 QEMU_CPUS ?= 2
 ACCEL ?= tcg
 DISK ?=
 EXTRA_QEMU_ARGS ?=
 NETWORK_ARGS ?= -netdev user,id=net0 -device virtio-net-pci,netdev=net0
-DISK_ARGS = -drive file=$(DISK)$(comma)format=raw$(comma)if=virtio
+DISK_ARGS = -drive file=$(DISK)$(comma)format=raw$(comma)if=virtio$(comma)index=1
 QEMU_EXTRA_ARGS ?= -accel $(ACCEL) $(NETWORK_ARGS) $(if $(strip $(DISK)),$(DISK_ARGS)) $(EXTRA_QEMU_ARGS)
 KERNEL_EXTRA_ARGS ?= nokaslr
 MMDEBSTRAP_FLAGS ?= $(if $(filter bookworm,$(SUITE)),--keyring='$(CURDIR)/.cache/debian-bookworm.gpg')
@@ -34,4 +38,5 @@ unexport KBUILD_OUTPUT
 include upstream.mk
 include study.mk
 
-export TARGET_ARCH ROOTFS_OVERLAY OUTPUT_DIR MODULES_DIR ROOTFS INITRAMFS SERIAL_LOG
+export TARGET_ARCH ROOTFS_OVERLAY OUTPUT_DIR MODULES_DIR ROOTFS SERIAL_LOG
+export ROOTFS_IMAGE ROOTFS_SIZE GUEST_HOSTNAME GUEST_ROOT_PASSWORD GUEST_SHELL CONSOLE
