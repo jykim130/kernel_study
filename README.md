@@ -23,13 +23,13 @@ kernel_study/
 ├─ README.md
 └─ kernel-utils/
    ├─ Makefile              # 프로젝트 기본값
-   ├─ upstream.mk           # 고정한 원본 Makefile + 한 줄의 확장
+   ├─ upstream.mk           # 고정한 원본 Makefile + 실습확장
    ├─ study.mk              # 커널 준비·실습 전달·환경 확인
    ├─ COPYING, UPSTREAM.md  # 원본 라이선스와 버전·변경점
    ├─ local.mk.example      # 개인 설정 예시
    ├─ scripts/, tests/      # 준비 도구와 모의 실행 테스트
    ├─ linux-5.15.2/         # 생성: 소스·.config·빌드 결과
-   ├─ labs/                 # 호스트에서 관리할 UPB 실습 코드
+   ├─ labs/                 # 호스트에서 관리할 실습 코드
    ├─ overlay/              # 게스트에 포함할 파일
    ├─ .cache/               # 생성: 다운로드·검증한 서명 키
    ├─ out/amd64/            # 생성: initramfs.cpio·콘솔 로그
@@ -75,8 +75,6 @@ initramfs·모듈·시리얼 콘솔·procfs·sysfs·debugfs·virtio·ext4·GDB �
 
 ```bash
 cd linux-5.15.2
-unset KBUILD_OUTPUT
-export ARCH=x86 CC=gcc-11 HOSTCC=gcc-11
 make defconfig
 cd ..
 make kernel-config
@@ -88,8 +86,6 @@ make kernel-config
 
 ```bash
 cd linux-5.15.2
-unset KBUILD_OUTPUT
-export ARCH=x86 CC=gcc-11 HOSTCC=gcc-11
 make -j$(nproc)
 cd ..
 ```
@@ -140,10 +136,7 @@ QEMU를 종료한 뒤 호스트에서 실행합니다.
 
 ```bash
 cd linux-5.15.2
-unset KBUILD_OUTPUT
-export ARCH=x86 CC=gcc-11 HOSTCC=gcc-11
-vim init/main.c
-make -j$(nproc)
+make -j$(nproc) // 커널 내부 수정이나 내용 추가 시 진행
 cd ..
 make boot
 ```
