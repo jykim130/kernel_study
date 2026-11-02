@@ -24,7 +24,7 @@ kernel: kernel-config
 	$(MAKE) -C "$(KERNELSRC)" ARCH=x86 CC="$(KERNEL_CC)" HOSTCC="$(KERNEL_CC)" -j$$(nproc)
 
 keys: check-linux
-	@if test "$(SUITE)" = bookworm && ! test -s .cache/debian-bookworm.gpg; then bash scripts/prepare-debian-keyring.sh; fi
+	@if test "$(SUITE)" = bookworm; then bash scripts/prepare-debian-keyring.sh; fi
 
 check-kernel: check-linux
 	bash scripts/check-kernel.sh

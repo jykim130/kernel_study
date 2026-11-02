@@ -13,6 +13,11 @@ import unittest
 PROJECT = Path(__file__).resolve().parents[1]
 BASH = os.environ.get('BASH_EXE') or shutil.which('bash')
 MAKE = os.environ.get('MAKE_EXE') or shutil.which('make') or shutil.which('mingw32-make')
+BOOKWORM_KEYS = {
+    'archive-key-12.asc': 'B8B80B5B623EAB6AD8775C45B7C5D7D6350947F8',
+    'archive-key-12-security.asc': '05AB90340C0C5E797F44A8C8254CF3B5AEC0A8F0',
+    'release-12.asc': '4D64FEC119C2029067D6E791F8D2585B8783D481',
+}
 if os.name == 'nt':
     BASH = BASH or r'C:\Program Files\Git\bin\bash.exe'
     if not MAKE and Path(r'C:\MinGW\bin\mingw32-make.exe').is_file():
@@ -44,9 +49,40 @@ for name in KERNELSRC ROOTFS_OVERLAY OUTPUT_ROOT OUTPUT_DIR MODULES_DIR ROOTFS I
     if [[ $value == [A-Za-z]:/* ]]; then export "$name=$(cygpath -u "$value")"; fi
 done
 ''')
+        if os.name == 'nt':
+            # Native Make may launch mkdir with C:/ arguments. Use Git Bash's
+            # /tmp alias, as above, for paths in this disposable fixture.
+            self.mock('mkdir', '''
+args=()
+for arg in "$@"; do
+    if [[ $arg == [A-Za-z]:/* ]]; then arg=$(cygpath -u "$arg"); fi
+    args+=("$arg")
+done
+exec /usr/bin/mkdir "${args[@]}"
+''')
         self.mock('uname', 'if [[ ${1:-} == -s ]]; then echo Linux; else echo x86_64; fi')
         for name in ('sudo', 'curl', 'apt-get'):
             self.mock(name, 'echo forbidden-tool >&2; exit 99')
+        # Public-key fixtures contain fingerprints; this mock models inspection
+        # and dearmoring without using real keys or making network requests.
+        self.mock('gpg', '''
+output=
+dearmor=no
+while (( $# )); do
+    case $1 in
+        --output) output=$2; shift 2 ;;
+        --homedir) shift 2 ;;
+        --dearmor) dearmor=yes; shift ;;
+        --*) shift ;;
+        *) input=$1; shift ;;
+    esac
+done
+if [[ $dearmor == yes ]]; then cp -- "$input" "$output"; exit; fi
+while IFS= read -r fingerprint; do
+    [[ $fingerprint =~ ^[0-9A-F]{40}$ ]] || exit 2
+    printf 'pub:-:4096:1:fixture:0:0::::::sc:\\nfpr:::::::::%s:\\n' "$fingerprint"
+done < "$input"
+''')
         self.mock('make', 'exec "$MAKE_TOOL" "$@"')
         self.mock('mmdebstrap', '''
 printf '%s\\0' "$@" > "$MOCK_STATE/pack-args"
@@ -69,7 +105,8 @@ exit "${MOCK_QEMU_EXIT:-0}"
 ''')
         self.mock('gdb-multiarch', 'printf "%s\\0" "$@" > "$MOCK_STATE/gdb-args"')
         (self.root / '.cache').mkdir()
-        (self.root / '.cache/debian-bookworm.gpg').write_text('fixture', encoding='utf-8')
+        self.keyring = self.root / '.cache/debian-bookworm.gpg'
+        self.keyring.write_text('\n'.join(BOOKWORM_KEYS.values()) + '\n', encoding='utf-8', newline='\n')
 
     def mock(self, name, body):
         path = self.bin / name
@@ -92,6 +129,26 @@ exit "${MOCK_QEMU_EXIT:-0}"
              'test', 'SHELL=' + str(shell).replace('\\', '/'), *args],
             cwd=self.root, env=env, text=True, encoding='utf-8', errors='replace',
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=35)
+
+    def mock_key_downloads(self, wrong_fingerprint=False):
+        cases = '\n'.join(
+            f'    */{name}) fingerprint={"0" * 40 if wrong_fingerprint else fingerprint} ;;'
+            for name, fingerprint in BOOKWORM_KEYS.items())
+        self.mock('curl', '''
+while (( $# )); do
+    case $1 in
+        --output) output=$2; shift 2 ;;
+        https://*) url=$1; shift ;;
+        *) shift ;;
+    esac
+done
+case $url in
+''' + cases + '''
+    *) exit 97 ;;
+esac
+printf '%s\\n' "$fingerprint" > "$output"
+echo key-download >> "$MOCK_STATE/events"
+''')
 
     def built_kernel(self):
         kernel = self.root / 'linux-5.15.2'
@@ -155,6 +212,38 @@ modules:
         self.assertEqual(args.count('-netdev'), 1)
         self.success(self.invoke('gdb', 'GDB_PORT=2345'))
         self.assertIn('target remote 127.0.0.1:2345', self.args('gdb-args'))
+
+    def test_image_prepares_missing_keyring_and_reuses_it(self):
+        self.built_kernel()
+        self.keyring.unlink()
+        self.mock_key_downloads()
+        self.success(self.invoke('image'))
+        self.assertEqual(self.keyring.read_text().splitlines(), list(BOOKWORM_KEYS.values()))
+        self.assertIn('--keyring=' + self.keyring.as_posix(), self.args('pack-args'))
+        self.success(self.invoke('image'))
+        self.assertEqual((self.root / 'events').read_text().splitlines().count('key-download'), 3)
+        self.assertFalse(list((self.root / '.cache').glob('debian-keys.*')))
+
+    def test_image_repairs_corrupt_and_incomplete_keyrings(self):
+        self.built_kernel()
+        self.mock_key_downloads()
+        for contents in ('corrupt', BOOKWORM_KEYS['release-12.asc'] + '\n'):
+            with self.subTest(contents=contents):
+                self.keyring.write_text(contents, encoding='utf-8', newline='\n')
+                self.success(self.invoke('rebuild'))
+                self.assertEqual(self.keyring.read_text().splitlines(), list(BOOKWORM_KEYS.values()))
+
+    def test_wrong_downloaded_key_stops_before_packaging(self):
+        self.built_kernel()
+        self.keyring.write_text('corrupt', encoding='utf-8')
+        self.mock_key_downloads(wrong_fingerprint=True)
+        result = self.invoke('boot')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Unexpected fingerprint', result.stderr)
+        self.assertEqual(self.keyring.read_text(), 'corrupt')
+        self.assertFalse((self.root / 'pack-args').exists())
+        self.assertFalse((self.root / 'qemu-args').exists())
+        self.assertFalse(list((self.root / '.cache').glob('debian-keys.*')))
 
     def test_added_packages_keep_baseline_and_disk_keeps_network(self):
         self.built_kernel()

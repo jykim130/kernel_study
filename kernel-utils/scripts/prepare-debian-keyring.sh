@@ -27,15 +27,26 @@ key_specs=(
     'archive-key-12-security.asc:05AB90340C0C5E797F44A8C8254CF3B5AEC0A8F0'
     'release-12.asc:4D64FEC119C2029067D6E791F8D2585B8783D481'
 )
+primary_fingerprints() {
+    gpg --batch --no-options --homedir "$key_work" \
+        --with-colons --show-keys "$1" |
+        awk -F: '$1 == "pub" { primary = 1; next } primary && $1 == "fpr" { print $10; primary = 0 }'
+}
+expected_fingerprints=$(printf '%s\n' "${key_specs[@]#*:}")
+if [[ -s $DEBIAN_KEYRING ]] &&
+    cached_fingerprints=$(primary_fingerprints "$DEBIAN_KEYRING" 2>/dev/null) &&
+    [[ $cached_fingerprints == "$expected_fingerprints" ]]; then
+    log "Using verified Bookworm keyring: $DEBIAN_KEYRING"
+    exit 0
+fi
+
 key_files=()
 for spec in "${key_specs[@]}"; do
     IFS=: read -r key_name expected_fingerprint <<< "$spec"
     log "Fetching Debian Bookworm signing key: $key_name"
     curl --fail --location --retry 3 --proto '=https' --proto-redir '=https' \
         "https://ftp-master.debian.org/keys/$key_name" --output "$key_work/$key_name"
-    actual_fingerprint=$(gpg --batch --no-options --homedir "$key_work" \
-        --with-colons --show-keys "$key_work/$key_name" |
-        awk -F: '$1 == "pub" { primary = 1; next } primary && $1 == "fpr" { print $10; primary = 0 }')
+    actual_fingerprint=$(primary_fingerprints "$key_work/$key_name")
     [[ $actual_fingerprint == "$expected_fingerprint" ]] ||
         die "Unexpected fingerprint for $key_name; refusing to install this key."
     gpg --batch --no-options --homedir "$key_work" --dearmor \

@@ -107,6 +107,9 @@ make boot
 Debian Bookworm 사용자 공간, 빌드한 커널 모듈, `overlay/`의 파일을
 `out/amd64/initramfs.cpio`에 묶습니다. Ubuntu의 오래된 Debian 키링 문제를 피하기 위해
 공식 Bookworm 키의 fingerprint를 검증해 사용합니다.
+키링 검증과 준비는 `make image`와 `make boot`에서 자동으로 실행합니다.
+키링이 없거나 내용이 잘못되면 다시 생성하고, 올바른 키링은 다운로드 없이 재사용합니다.
+따로 키 준비 스크립트를 실행하거나 `--keyring` 옵션을 지정할 필요는 없습니다.
 모듈은 이미지에 설치할 때 strip하고 호스트의 원본 `.ko`는 보존합니다.
 
 `make boot`는 `bzImage`와 initramfs로 QEMU를 부팅합니다. 이미지가 없거나
