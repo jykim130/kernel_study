@@ -1,7 +1,7 @@
 # Linux 커널 스터디 실습 환경
 
 **Ubuntu 22.04 LTS x86-64 VM**에서 **Linux 5.15.2**를 직접 빌드하고,
-[aweeraman/kernel-utils](https://github.com/aweeraman/kernel-utils)의 Makefile로
+[aweeraman/kernel-utils](https://github.com/aweeraman/kernel-utils)의 Makefile을 스터디 실습 환경에 맞게 변경하여,
 Debian Bookworm **영구 ext4 루트 디스크**를 만들어 QEMU에서 실행합니다.
 게스트는 systemd로 부팅하며, 파일·설정·설치한 패키지는 재부팅 후에도 유지됩니다.
 
@@ -12,12 +12,12 @@ Debian Bookworm **영구 ext4 루트 디스크**를 만들어 QEMU에서 실행�
 
 커널 소스 수정·빌드는 Ubuntu에서 하고 QEMU 게스트에서 모듈 적재와 테스트를 합니다.
 아래 명령은 모두 **Windows가 아닌 Ubuntu VM의 터미널**에서 실행합니다.
-VM 시작 사양은 CPU 4개, RAM 8GB, 디스크 60GB를 권장합니다.
-QEMU 기본값은 TCG, CPU 2개, RAM 2GB입니다. 프로젝트 경로에는 공백·쉼표를 사용하지 않습니다.
+VM 시작 사양은 CPU 4개, RAM 8GB, 디스크 40 ~ 60GB를 권장합니다.
+QEMU 기본값은 TCG, CPU 2개, RAM 2GB입니다. 
 
 ## 디렉토리 구조
 
-환경 준비 후의 로컬 구조입니다. 커널 소스와 생성물은 Git에 포함하지 않습니다.
+환경 준비 후의 로컬 구조입니다. 
 
 ```text
 kernel_study/
@@ -37,7 +37,6 @@ kernel_study/
    └─ disks/                # 생성: 영구 루트 디스크 rootfs.img·메타데이터·백업
 ```
 
-원본은 파일로 포함했으며 중첩 Git 저장소나 서브모듈은 사용하지 않습니다.
 고정한 커밋과 수정점은 [UPSTREAM.md](kernel-utils/UPSTREAM.md)에 기록합니다.
 
 ## 1. 저장소와 의존성 준비
@@ -83,7 +82,6 @@ cd ..
 주요 결과는 `linux-5.15.2/arch/x86/boot/bzImage`, `linux-5.15.2/vmlinux`이며,
 기본 릴리스는 `5.15.2-kernel-study`입니다.
 준비와 빌드를 한 번에 수행하는 명령은 `make kernel`입니다.
-커널 빌드는 이 프로젝트의 준비 도구이며 원본 kernel-utils의 기능은 아닙니다.
 
 ## 4. 영구 루트 디스크 생성과 부팅
 
@@ -102,15 +100,10 @@ Debian Bookworm, systemd, 커널 모듈과 `overlay/`의 파일을 포함하며,
 
 ```bash
 uname -r # 5.15.2-kernel-study가 나오는지 확인합니다.
-cat /etc/os-release
-ps -p 1 -o pid,comm,args
-findmnt /
-ip -br address
 ```
 
 루트 `/`는 **`disks/rootfs.img`에 저장되는 ext4 파일시스템**입니다.
-게스트에서 만든 파일·설정·설치한 패키지는 다음 부팅에도 유지됩니다.
-일반적인 실습에서는 별도의 영구 디스크를 연결할 필요가 없습니다.
+이를 이용하면, 게스트에서 만든 파일·설정·설치한 패키지는 다음 부팅에도 유지됩니다.
 포맷·파티션·LVM 등 디스크 자체를 다루는 실습은 별도 디스크를 `DISK=...`로 연결해
 `/dev/vdb`에서 진행합니다. `/dev/vda`는 현재 사용 중인 루트 디스크입니다.
 
@@ -136,7 +129,7 @@ make boot
 `make update-image`는 게스트가 종료된 상태에서 새 커널 모듈과 `overlay/`를
 기존 루트 디스크에 반영합니다. 같은 경로의 파일은 덮어쓰고 그 밖의 게스트 데이터는 유지합니다.
 `make boot`는 모듈을 자동 갱신하지 않으므로, 모듈을 다시 빌드했다면 릴리스 이름이 같아도
-`make update-image`를 실행합니다. `make clean`과 `make distclean`은 루트 디스크를 지우지 않습니다.
+`make update-image`를 실행합니다.
 
 ## 6. 패키지와 개인 설정
 
