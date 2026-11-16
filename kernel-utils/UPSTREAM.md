@@ -41,7 +41,8 @@ submodule is required. Upstream changes are reviewed and imported explicitly.
 
 `templates/lab02-kernel-api/` is copied from `tools/labs/templates/kernel_api`
 at that commit and keeps the full solutions. The task sources are unchanged;
-`README.md` is a Korean study guide based on the upstream lab page.
+`README.md` is a Korean study guide based on the upstream lab page, and
+`Makefile` is a local addition that builds every task from the lab directory.
 
 `scripts/generate_skels.py` is `tools/labs/templates/generate_skels.py` from
 the same commit. Its regex literals are raw strings to avoid escape warnings
