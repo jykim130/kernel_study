@@ -7,7 +7,7 @@ HOST_DEPS := build-essential gcc-11 bc bison flex libncurses-dev libssl-dev \
  e2fsprogs util-linux mmdebstrap libarchive-tools uidmap debian-archive-keyring \
  qemu-system-x86 qemu-utils gdb-multiarch python3
 
-.PHONY: source kernel-config kernel keys check-linux check-kernel lab stage test
+.PHONY: source kernel-config kernel keys check-linux check-kernel skels lab stage test
 
 check-linux:
 	bash scripts/check-linux.sh
@@ -35,6 +35,9 @@ check-gdb: check-linux
 copy-modules: check-kernel check-output-path
 boot-log: check-linux check-output-path
 
+skels: check-linux
+	LAB="$(LAB)" TODO="$(TODO)" bash scripts/make-skels.sh
+
 lab: check-kernel
 	bash scripts/stage-lab.sh --build
 
@@ -56,6 +59,7 @@ study-help:
 	@echo "  make source          Download and verify the kernel source"
 	@echo "  make kernel-config   Prepare an in-tree configuration (preserves source edits)"
 	@echo "  make kernel          Configure and build; manual make in the kernel tree also works"
+	@echo "  make skels LAB=name  Generate labs/name skeletons from templates/name; keep existing files"
 	@echo "  make lab LAB=name    Build external modules from labs/name and stage their files"
 	@echo "  make stage LAB=name  Stage already-built lab files without compiling"
 	@echo "  make update-image    Install rebuilt modules and overlay; preserve guest data"

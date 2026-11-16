@@ -3,6 +3,9 @@
 /kernel-utils/out/
 /kernel-utils/local.mk
 /kernel-utils/overlay/root/labs/
+# make skels output; templates/ holds the sources. Lab 01 predates templates.
+/kernel-utils/labs/*/
+!/kernel-utils/labs/lab01-kernel-modules/
 /kernel-utils/disks/*
 !/kernel-utils/disks/README.md
 **/*.ko

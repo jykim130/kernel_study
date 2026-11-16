@@ -32,3 +32,21 @@ and its repository entry contains no temporary host paths.
 `Makefile` supplies project defaults, and `study.mk` adds preparation, lab staging
 and configuration checks. No nested Git repository or Git
 submodule is required. Upstream changes are reviewed and imported explicitly.
+
+# Lab sources
+
+- Project: https://github.com/linux-kernel-labs/linux
+- Pinned commit: `a251a609fa4a8efb4fc41f9315d18c70a333aa1e`
+- License: GPL-2.0, the license of that repository.
+
+`templates/lab02-kernel-api/` is copied from `tools/labs/templates/kernel_api`
+at that commit and keeps the full solutions. The task sources are unchanged;
+`README.md` is a Korean study guide based on the upstream lab page.
+
+`scripts/generate_skels.py` is `tools/labs/templates/generate_skels.py` from
+the same commit. Its regex literals are raw strings to avoid escape warnings
+on newer Python. `scripts/make-skels.sh` wraps it like upstream `make skels`
+(default `TODO=0`), but writes into `labs/` and never overwrites existing files.
+Like upstream `skels/Kbuild`, it regenerates a top-level `labs/<lab>/Kbuild`
+that lists every task, so `make lab LAB=<lab>` builds them in one kbuild run.
+Lab 01 predates this workflow and keeps its skeletons in `labs/`.

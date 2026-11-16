@@ -30,7 +30,8 @@ kernel_study/
    ├─ local.mk.example      # 개인 설정 예시
    ├─ scripts/, tests/      # 준비 도구와 모의 실행 테스트
    ├─ linux-5.15.2/         # 생성: 소스·.config·빌드 결과
-   ├─ labs/                 # 호스트에서 관리할 실습 코드
+   ├─ templates/            # UPB 실습 원본 (정답 포함)
+   ├─ labs/                 # 생성: make skels로 만든 스켈레톤·풀이 (Lab 01은 저장소에 포함)
    ├─ overlay/              # 게스트에 포함할 파일
    ├─ .cache/               # 생성: 다운로드·검증한 서명 키
    ├─ out/amd64/            # 생성: 임시 rootfs.tar·모듈·콘솔 로그
@@ -67,7 +68,8 @@ make kernel-config
 `make source`는 kernel.org의 tar.xz를 받아 고정된 SHA-256을 확인하고
 `linux-5.15.2/`에 풉니다. 
 `make kernel-config`는 `.config`가 없을 때 `x86_64_defconfig`를 생성하고,
-모듈·시리얼 콘솔·procfs·sysfs·debugfs·virtio·ext4·systemd용 cgroup·ACPI·GDB 옵션을 적용합니다.
+모듈·시리얼 콘솔·procfs·sysfs·debugfs·virtio·ext4·systemd용 cgroup·ACPI·GDB 옵션과
+원자 컨텍스트 sleep 검사(`DEBUG_ATOMIC_SLEEP`)를 적용합니다.
 루트 디스크를 initramfs 없이 읽으므로 virtio 블록 드라이버와 ext4는 커널에 내장(`=y`)합니다.
 
 ## 3. 커널 직접 빌드
