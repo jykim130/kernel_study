@@ -52,3 +52,4 @@ git stash pop
 
 - [Lab 01. 커널 모듈 입문](lab01-kernel-modules/README.md)
 - [Lab 02. Kernel API](../templates/lab02-kernel-api/README.md)
+- [Lab 03. 문자 장치 드라이버](../templates/lab03-device-drivers/README.md)

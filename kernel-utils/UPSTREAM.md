@@ -44,6 +44,13 @@ at that commit and keeps the full solutions. The task sources are unchanged;
 `README.md` is a Korean study guide based on the upstream lab page, and
 `Makefile` is a local addition that builds every task from the lab directory.
 
+`templates/lab03-device-drivers/` is copied from `tools/labs/templates/device_drivers`
+at that commit (`kernel/`, `user/`, `include/`; `extra/` is not imported). The
+driver source and header are unchanged. `user/Makefile` drops `-m32` because the
+study guest is x86-64, and the binary is built on the Ubuntu VM since the guest
+has no compiler. `README.md` is a Korean study guide and `Makefile` is the same
+local addition as in Lab 02.
+
 `scripts/generate_skels.py` is `tools/labs/templates/generate_skels.py` from
 the same commit. Its regex literals are raw strings to avoid escape warnings
 on newer Python. `scripts/make-skels.sh` wraps it like upstream `make skels`
